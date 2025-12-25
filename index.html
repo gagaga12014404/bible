@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>有聲聖經 (範圍播放版)</title>
+    <style>
+        /* --- 基礎設定 --- */
+        body { margin: 0; font-family: "Microsoft JhengHei", Arial, sans-serif; background-color: #f4f6f8; color: #333; }
+        
+        /* --- 頂部導航與搜尋 --- */
+        .navbar { background-color: #fff; padding: 10px 20px; display: flex; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 1000; }
+        .search-container { width: 100%; max-width: 600px; }
+        .search-input { width: 100%; padding: 10px 15px; border: 1px solid #ddd; background-color: #f0f2f5; border-radius: 20px; font-size: 16px; outline: none; box-sizing: border-box; }
+        .search-input:focus { background-color: #fff; border-color: #1abc9c; }
+
+        /* --- 橫向書卷導覽列 --- */
+        .book-nav-container {
+            background-color: #2c3e50; white-space: nowrap; overflow-x: auto; padding: 0 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: sticky; top: 54px; z-index: 999;
+            -webkit-overflow-scrolling: touch;
+        }
+        .book-nav-container::-webkit-scrollbar { height: 4px; }
+        .book-nav-container::-webkit-scrollbar-thumb { background: #7f8c8d; border-radius: 2px; }
+        .book-nav-item { display: inline-block; padding: 15px 12px; color: #bdc3c7; text-decoration: none; font-size: 15px; cursor: pointer; border-bottom: 3px solid transparent; }
+        .book-nav-item:hover { color: #fff; }
+        .book-nav-item.active { color: #fff; font-weight: bold; border-bottom: 3px solid #1abc9c; background-color: rgba(255,255,255,0.05); }
+
+        /* --- 內容區 --- */
+        .main-content { padding: 20px; max-width: 800px; margin: 0 auto; min-height: 80vh; }
+        .book-title { color: #2c3e50; text-align: center; margin-bottom: 10px; font-weight: bold; }
+        
+        /* 章節按鈕 */
+        .chapter-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 20px; }
+        .chapter-link { 
+            display: inline-block; text-align: center; min-width: 30px; padding: 6px 10px; border-radius: 4px; cursor: pointer;
+            color: #2c3e50; background-image: linear-gradient(to top, #e6c59b 0%, #f5deb3 100%); font-weight: bold; box-shadow: 0 1px 2px rgba(0,0,0,0.1); user-select: none;
+        }
+
+        /* --- 播放控制列 (新功能) --- */
+        .playback-control-bar {
+            background: #fff; padding: 15px; border-radius: 10px; margin-bottom: 20px;
+            display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 5px solid #1abc9c;
+        }
+        .control-input { width: 60px; padding: 5px; border: 1px solid #ccc; border-radius: 5px; text-align: center; font-size: 16px; }
+        .btn-play { padding: 8px 20px; background-color: #1abc9c; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        .btn-play:hover { background-color: #16a085; }
+        .btn-stop { padding: 8px 15px; background-color: #e74c3c; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .btn-stop:hover { background-color: #c0392b; }
+        
+        /* --- 經文列表 --- */
+        .scripture-content { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        
+        .verse-row {
+            padding: 10px 15px; border-bottom: 1px solid #eee; line-height: 1.8; font-size: 19px; color: #333; transition: background 0.3s;
+        }
+        .verse-row:last-child { border-bottom: none; }
+        
+        /* 正在播放的高亮樣式 */
+        .verse-row.playing { background-color: #e8f8f5; border-left: 4px solid #1abc9c; color: #16a085; font-weight: 500; }
+
+        .verse-num { color: #999; font-size: 0.75em; margin-right: 8px; vertical-align: super; user-select: none; font-weight: normal; }
+        
+        /* 搜尋結果 */
+        .search-result-item { background: #fff; padding: 15px; margin-bottom: 12px; border-radius: 8px; cursor: pointer; border-left: 5px solid #1abc9c; }
+        .highlight { background-color: #fff3cd; color: #d35400; font-weight: bold; }
+        
+        #loading-msg { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 3000; }
+    </style>
+</head>
+<body>
+
+    <div id="loading-msg">正在讀取聖經資料庫...</div>
+
+    <nav class="navbar">
+        <div class="search-container">
+            <input type="text" id="searchInput" class="search-input" placeholder="輸入關鍵字自動搜尋..." oninput="handleSearch(this.value)" disabled>
+        </div>
+    </nav>
+
+    <div id="bookNav" class="book-nav-container"></div>
+
+    <div class="main-content">
+        <div id="search-view" style="display: none;">
+            <h2 style="text-align: center; color: #555;">搜尋結果</h2>
+            <div id="search-results-content"></div>
+        </div>
+
+        <div id="read-view">
+            <h1 id="currentBookTitle" class="book-title">創世記</h1>
+            <div id="chapterContainer" class="chapter-list"></div>
+
+            <div id="playbackControls" class="playback-control-bar" style="display: none;">
+                <span>第</span>
+                <input type="number" id="startVerseInput" class="control-input" min="1" value="1">
+                <span>節 — 第</span>
+                <input type="number" id="endVerseInput" class="control-input" min="1" value="1">
+                <span>節</span>
+                <button class="btn-play" onclick="playRange()">▶ 播放</button>
+                <button class="btn-stop" onclick="stopAudio()">⏹</button>
+            </div>
+            
+            <div id="scriptureText" class="scripture-content" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 書卷資料
+        const bibleDataStructure = [
+            {"book": "創世記", "chapters": [31, 25, 24, 26, 32, 22, 24, 22, 29, 32, 32, 20, 18, 24, 21, 16, 27, 33, 38, 18, 34, 24, 20, 67, 34, 35, 46, 22, 35, 43, 55, 32, 20, 31, 29, 43, 36, 30, 23, 23, 57, 38, 34, 34, 28, 34, 31, 22, 33, 26]},
+            {"book": "出埃及記", "chapters": [22, 25, 22, 31, 23, 30, 25, 32, 35, 29, 10, 51, 22, 31, 27, 36, 16, 27, 25, 26, 36, 31, 33, 18, 40, 37, 21, 43, 46, 38, 18, 35, 23, 35, 35, 38, 29, 31, 43, 38]},
+            {"book": "利未記", "chapters": [17, 16, 17, 35, 19, 30, 38, 36, 24, 20, 47, 8, 59, 57, 33, 34, 16, 30, 37, 27, 24, 33, 44, 23, 55, 46, 34]},
+            {"book": "民數記", "chapters": [54, 34, 51, 49, 31, 27, 89, 26, 23, 36, 35, 16, 33, 45, 41, 50, 13, 32, 22, 29, 35, 41, 30, 25, 18, 65, 23, 31, 40, 16, 54, 42, 56, 29, 34, 13]},
+            {"book": "申命記", "chapters": [46, 37, 29, 49, 33, 25, 26, 20, 29, 22, 32, 32, 18, 29, 23, 22, 20, 22, 21, 20, 23, 30, 25, 22, 19, 19, 26, 68, 29, 20, 30, 52, 29, 12]},
+            {"book": "約書亞記", "chapters": [18, 24, 17, 24, 15, 27, 26, 35, 27, 43, 23, 24, 33, 15, 63, 10, 18, 28, 51, 9, 45, 34, 16, 33]},
+            {"book": "士師記", "chapters": [36, 23, 31, 24, 31, 40, 25, 35, 57, 18, 40, 15, 25, 20, 20, 31, 13, 31, 30, 48, 25]},
+            {"book": "路得記", "chapters": [22, 23, 18, 22]},
+            {"book": "撒母耳記上", "chapters": [28, 36, 21, 22, 12, 21, 17, 22, 27, 27, 15, 25, 23, 52, 35, 23, 58, 30, 24, 42, 15, 23, 29, 22, 44, 25, 12, 25, 11, 31, 13]},
+            {"book": "撒母耳記下", "chapters": [27, 32, 39, 12, 25, 23, 29, 18, 13, 19, 27, 31, 39, 33, 37, 23, 29, 33, 43, 26, 22, 51, 39, 25]},
+            {"book": "列王紀上", "chapters": [53, 46, 28, 34, 18, 38, 51, 66, 28, 29, 43, 33, 34, 31, 34, 34, 24, 46, 21, 43, 29, 53]},
+            {"book": "列王紀下", "chapters": [18, 25, 27, 44, 27, 33, 20, 29, 37, 36, 21, 21, 25, 29, 38, 20, 41, 37, 37, 21, 26, 20, 37, 20, 30]},
+            {"book": "歷代志上", "chapters": [54, 55, 24, 43, 26, 81, 40, 40, 44, 14, 47, 40, 14, 17, 29, 43, 27, 17, 19, 8, 30, 19, 32, 31, 31, 32, 34, 21, 30]},
+            {"book": "歷代志下", "chapters": [17, 18, 17, 22, 14, 42, 22, 18, 31, 19, 23, 16, 22, 15, 19, 14, 19, 34, 11, 37, 20, 12, 21, 27, 28, 23, 9, 27, 36, 27, 21, 33, 25, 33, 27, 23]},
+            {"book": "以斯拉記", "chapters": [11, 70, 13, 24, 17, 22, 28, 36, 15, 44]},
+            {"book": "尼希米記", "chapters": [11, 20, 32, 23, 19, 19, 73, 18, 38, 39, 36, 47, 31]},
+            {"book": "以斯帖記", "chapters": [22, 23, 15, 17, 14, 14, 10, 17, 32, 3]},
+            {"book": "約伯記", "chapters": [22, 13, 26, 21, 27, 30, 21, 22, 35, 22, 20, 25, 28, 22, 35, 22, 16, 21, 29, 29, 34, 30, 17, 25, 6, 14, 23, 28, 25, 31, 40, 22, 33, 37, 16, 33, 24, 41, 30, 24, 34, 17]},
+            {"book": "詩篇", "chapters": [6, 12, 8, 8, 12, 10, 17, 9, 20, 18, 7, 8, 6, 7, 5, 11, 15, 50, 14, 9, 13, 31, 6, 10, 22, 12, 14, 9, 11, 12, 24, 11, 22, 22, 28, 12, 40, 22, 13, 17, 13, 11, 5, 26, 17, 11, 9, 14, 20, 23, 19, 9, 6, 7, 23, 13, 11, 11, 17, 12, 8, 12, 11, 10, 13, 20, 7, 35, 36, 5, 24, 20, 28, 23, 10, 12, 20, 72, 13, 19, 16, 8, 18, 12, 13, 17, 7, 18, 52, 17, 16, 15, 5, 23, 11, 13, 12, 9, 9, 5, 8, 28, 22, 35, 45, 48, 43, 13, 31, 7, 10, 10, 9, 8, 18, 19, 2, 29, 176, 7, 8, 9, 4, 8, 5, 6, 5, 6, 8, 8, 3, 18, 3, 3, 21, 26, 9, 8, 24, 13, 10, 7, 12, 15, 21, 10, 20, 14, 9, 6]},
+            {"book": "箴言", "chapters": [33, 22, 35, 27, 23, 35, 27, 36, 18, 32, 31, 28, 25, 35, 33, 33, 28, 24, 29, 30, 31, 29, 35, 34, 28, 28, 27, 28, 27, 33, 31]},
+            {"book": "傳道書", "chapters": [18, 26, 22, 16, 20, 12, 29, 17, 18, 20, 10, 14]},
+            {"book": "雅歌", "chapters": [17, 17, 11, 16, 16, 13, 13, 14]},
+            {"book": "以賽亞書", "chapters": [31, 22, 26, 6, 30, 13, 25, 22, 21, 34, 16, 6, 22, 32, 9, 14, 14, 7, 25, 6, 17, 25, 18, 23, 12, 21, 13, 29, 24, 33, 9, 20, 24, 17, 10, 22, 38, 22, 8, 31, 29, 25, 28, 28, 25, 13, 15, 22, 26, 11, 23, 15, 12, 17, 13, 12, 21, 14, 21, 22, 11, 12, 19, 12, 25, 24]},
+            {"book": "耶利米書", "chapters": [19, 37, 25, 31, 31, 30, 34, 22, 26, 25, 23, 17, 27, 22, 21, 21, 27, 23, 15, 18, 14, 30, 40, 10, 38, 24, 22, 17, 32, 24, 40, 44, 26, 22, 19, 32, 21, 28, 18, 16, 18, 22, 13, 30, 5, 28, 7, 47, 39, 46, 64, 34]},
+            {"book": "耶利米哀歌", "chapters": [22, 22, 66, 22, 22]},
+            {"book": "以西結書", "chapters": [28, 10, 27, 17, 17, 14, 27, 18, 11, 22, 25, 28, 23, 23, 8, 63, 24, 32, 14, 49, 32, 31, 49, 27, 17, 21, 36, 26, 21, 26, 18, 32, 33, 31, 15, 38, 28, 23, 29, 49, 26, 20, 27, 31, 25, 24, 23, 35]},
+            {"book": "但以理書", "chapters": [21, 49, 30, 37, 31, 28, 28, 27, 27, 21, 45, 13]},
+            {"book": "何西阿書", "chapters": [11, 23, 5, 19, 15, 11, 16, 14, 17, 15, 12, 14, 16, 9]},
+            {"book": "約珥書", "chapters": [20, 32, 21]},
+            {"book": "阿摩司書", "chapters": [15, 16, 15, 13, 27, 14, 17, 14, 15]},
+            {"book": "俄巴底亞書", "chapters": [21]},
+            {"book": "約拿書", "chapters": [17, 10, 10, 11]},
+            {"book": "彌迦書", "chapters": [16, 13, 12, 13, 15, 16, 20]},
+            {"book": "那鴻書", "chapters": [15, 13, 19]},
+            {"book": "哈巴谷書", "chapters": [17, 20, 19]},
+            {"book": "西番雅書", "chapters": [18, 15, 20]},
+            {"book": "哈該書", "chapters": [15, 23]},
+            {"book": "撒迦利亞書", "chapters": [21, 13, 10, 14, 11, 15, 14, 23, 17, 12, 17, 14, 9, 21]},
+            {"book": "瑪拉基書", "chapters": [14, 17, 18, 6]},
+            {"book": "馬太福音", "chapters": [25, 23, 17, 25, 48, 34, 29, 34, 38, 42, 30, 50, 58, 36, 39, 28, 27, 35, 30, 34, 46, 46, 39, 51, 46, 75, 66, 20]},
+            {"book": "馬可福音", "chapters": [45, 28, 35, 41, 43, 56, 37, 38, 50, 52, 33, 44, 37, 72, 47, 20]},
+            {"book": "路加福音", "chapters": [80, 52, 38, 44, 39, 49, 50, 56, 62, 42, 54, 59, 35, 35, 32, 31, 37, 43, 48, 47, 38, 71, 56, 53]},
+            {"book": "約翰福音", "chapters": [51, 25, 36, 54, 47, 71, 53, 59, 41, 42, 57, 50, 38, 31, 27, 33, 26, 40, 42, 31, 25]},
+            {"book": "使徒行傳", "chapters": [26, 47, 26, 37, 42, 15, 60, 40, 43, 48, 30, 25, 52, 28, 41, 40, 34, 28, 41, 38, 40, 30, 35, 27, 27, 32, 44, 31]},
+            {"book": "羅馬書", "chapters": [32, 29, 31, 25, 21, 23, 25, 39, 33, 21, 36, 21, 14, 23, 33, 27]},
+            {"book": "哥林多前書", "chapters": [31, 16, 23, 21, 13, 20, 40, 13, 27, 33, 34, 31, 13, 40, 58, 24]},
+            {"book": "哥林多後書", "chapters": [24, 17, 18, 18, 21, 18, 16, 24, 15, 18, 33, 21, 14]},
+            {"book": "加拉太書", "chapters": [24, 21, 29, 31, 26, 18]},
+            {"book": "以弗所書", "chapters": [23, 22, 21, 32, 33, 24]},
+            {"book": "腓立比書", "chapters": [30, 30, 21, 23]},
+            {"book": "歌羅西書", "chapters": [29, 23, 25, 18]},
+            {"book": "帖撒羅尼迦前書", "chapters": [10, 20, 13, 18, 28]},
+            {"book": "帖撒羅尼迦後書", "chapters": [12, 17, 18]},
+            {"book": "提摩太前書", "chapters": [20, 15, 16, 16, 25, 21]},
+            {"book": "提摩太後書", "chapters": [18, 26, 17, 22]},
+            {"book": "提多書", "chapters": [16, 15, 15]},
+            {"book": "腓利門書", "chapters": [25]},
+            {"book": "希伯來書", "chapters": [14, 18, 19, 16, 14, 20, 28, 13, 28, 39, 40, 29, 25]},
+            {"book": "雅各書", "chapters": [27, 26, 18, 17, 20]},
+            {"book": "彼得前書", "chapters": [25, 25, 22, 19, 14]},
+            {"book": "彼得後書", "chapters": [21, 22, 18]},
+            {"book": "約翰一書", "chapters": [10, 29, 24, 21, 21]},
+            {"book": "約翰二書", "chapters": [13]},
+            {"book": "約翰三書", "chapters": [15]},
+            {"book": "猶大書", "chapters": [25]},
+            {"book": "啟示錄", "chapters": [20, 29, 22, 11, 14, 17, 17, 13, 21, 11, 19, 17, 18, 20, 8, 21, 18, 24, 21, 15, 27, 21]}
+        ];
+
+        let allScriptures = []; 
+        let currentChapterVerses = []; // 暫存當前章節的經文資料，方便播放
+
+        // --- 全域變數：音訊播放相關 ---
+        let currentAudio = new Audio();
+        let playQueue = []; // 待播放清單
+        let isPlaying = false; 
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            renderBookNav();
+            
+            try {
+                const response = await fetch('input.txt');
+                if (!response.ok) throw new Error("找不到 input.txt");
+                
+                const text = await response.text();
+                parseBibleText(text);
+                
+                document.getElementById('loading-msg').style.display = 'none';
+                document.getElementById('searchInput').disabled = false;
+                
+                // 預設: 創世記 第一章
+                selectBook(0);
+                
+            } catch (err) {
+                document.getElementById('loading-msg').textContent = "讀取失敗: 請確認 input.txt 存在並使用 Server 開啟";
+                console.error(err);
+            }
+        });
+
+        // 解析邏輯 (含 ID)
+        function parseBibleText(rawText) {
+            const lines = rawText.split(/\r?\n/);
+            let lineIdx = 0;
+            const totalLines = lines.length;
+            let globalAudioIndex = 1;
+
+            bibleDataStructure.forEach(book => {
+                const bookName = book.book;
+                book.chapters.forEach((verseCount, chapIdx) => {
+                    const realChapter = chapIdx + 1;
+                    for (let v = 1; v <= verseCount; v++) {
+                        if (lineIdx >= totalLines) return;
+                        
+                        allScriptures.push({
+                            book: bookName,
+                            chapter: realChapter,
+                            verse: v,
+                            text: lines[lineIdx].trim(),
+                            id: globalAudioIndex 
+                        });
+                        
+                        globalAudioIndex++;
+                        lineIdx++;
+                    }
+                });
+            });
+        }
+
+        // --- UI: 橫向書卷選單 ---
+        function renderBookNav() {
+            const navContainer = document.getElementById("bookNav");
+            navContainer.innerHTML = "";
+            
+            bibleDataStructure.forEach((item, index) => {
+                const span = document.createElement("span");
+                span.className = "book-nav-item";
+                span.textContent = item.book;
+                span.onclick = () => selectBook(index);
+                navContainer.appendChild(span);
+            });
+        }
+
+        // --- 選擇書卷 ---
+        function selectBook(index) {
+            document.getElementById("read-view").style.display = "block";
+            document.getElementById("search-view").style.display = "none";
+            document.getElementById("searchInput").value = "";
+
+            const currentBook = bibleDataStructure[index];
+            document.getElementById("currentBookTitle").textContent = currentBook.book;
+            
+            // 更新導覽列樣式
+            const navItems = document.querySelectorAll('.book-nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+            navItems[index].classList.add('active');
+            navItems[index].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+
+            // 產生章節按鈕
+            const container = document.getElementById("chapterContainer");
+            container.innerHTML = "";
+
+            currentBook.chapters.forEach((_, i) => {
+                const chapterNum = i + 1;
+                const displayNum = chapterNum < 10 ? `0${chapterNum}` : chapterNum;
+                const link = document.createElement("div");
+                link.className = "chapter-link";
+                link.textContent = displayNum;
+                link.onclick = () => {
+                    updateChapterActiveState(link);
+                    loadChapterText(currentBook.book, chapterNum);
+                };
+                if (i === 0) {
+                     link.style.backgroundColor = "#2c3e50";
+                     link.style.color = "#fff";
+                }
+                container.appendChild(link);
+            });
+
+            loadChapterText(currentBook.book, 1);
+        }
+
+        function updateChapterActiveState(activeLink) {
+            document.querySelectorAll('.chapter-link').forEach(el => {
+                el.style.backgroundColor = "#e6c59b"; 
+                el.style.backgroundImage = "linear-gradient(to top, #e6c59b 0%, #f5deb3 100%)";
+                el.style.color = "#2c3e50";
+            });
+            activeLink.style.background = "#2c3e50";
+            activeLink.style.color = "#fff";
+        }
+
+        // --- 載入經文 (純文字模式，並設定播放範圍輸入框) ---
+        function loadChapterText(bookName, chapterNum) {
+            // 1. 顯示控制列
+            const controlBar = document.getElementById("playbackControls");
+            controlBar.style.display = "flex";
+
+            // 2. 清空並填充經文
+            const container = document.getElementById("scriptureText");
+            container.style.display = "block";
+            container.innerHTML = "";
+            
+            // 取得當前章節所有經文
+            currentChapterVerses = allScriptures.filter(s => s.book === bookName && s.chapter === chapterNum);
+
+            // 更新播放輸入框的範圍限制
+            const totalVerses = currentChapterVerses.length;
+            const startInput = document.getElementById("startVerseInput");
+            const endInput = document.getElementById("endVerseInput");
+            
+            startInput.max = totalVerses;
+            endInput.max = totalVerses;
+            startInput.value = 1;           // 預設從第1節
+            endInput.value = totalVerses;   // 預設到最後一節
+
+            // 渲染經文列表
+            currentChapterVerses.forEach(v => {
+                const row = document.createElement("div");
+                row.className = "verse-row";
+                row.id = `verse-row-${v.id}`; // 方便播放時高亮
+                
+                // 這裡只顯示純文字，不加按鈕
+                row.innerHTML = `<span class="verse-num">${v.verse}</span>${v.text}`;
+                container.appendChild(row);
+            });
+            
+            // 切換章節時停止上一段音訊
+            stopAudio();
+            window.scrollTo({ top: 0 });
+        }
+
+        // --- 音訊播放邏輯 (範圍播放) ---
+
+        function playRange() {
+            const startVal = parseInt(document.getElementById("startVerseInput").value);
+            const endVal = parseInt(document.getElementById("endVerseInput").value);
+            const maxVal = currentChapterVerses.length;
+
+            if (isNaN(startVal) || isNaN(endVal) || startVal < 1 || endVal > maxVal || startVal > endVal) {
+                alert(`請輸入正確範圍 (1 ~ ${maxVal})`);
+                return;
+            }
+
+            // 建立播放清單
+            // currentChapterVerses[0] 對應第 1 節
+            // 所以 slice 的索引是 startVal - 1 到 endVal
+            const versesToPlay = currentChapterVerses.slice(startVal - 1, endVal);
+            
+            playQueue = versesToPlay.map(v => v.id); // 只需要 ID
+            isPlaying = true;
+
+            // 開始播放第一首
+            playNextInQueue();
+        }
+
+        function playNextInQueue() {
+            if (!isPlaying || playQueue.length === 0) {
+                isPlaying = false;
+                stopAudio(); 
+                return;
+            }
+
+            const nextId = playQueue.shift(); 
+            const fileName = String(nextId).padStart(3, '0') + ".mp3";
+
+            // ★★★ 這裡保留了「分資料夾」的優化邏輯 ★★★
+            // 如果你的 mp3 資料夾結構是 mp3/0/001.mp3, mp3/1/1000.mp3 ...
+            const subFolder = Math.floor(nextId / 1000);
+            const filePath = `mp3/${subFolder}/${fileName}`; 
+            
+            // 清除上一節高亮
+            document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
+            // 高亮當前
+            const currentRow = document.getElementById(`verse-row-${nextId}`);
+            if (currentRow) {
+                currentRow.classList.add('playing');
+                // 自動捲動到正在播放的經文
+                currentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            currentAudio.src = filePath;
+            currentAudio.play();
+
+            currentAudio.onended = () => {
+                playNextInQueue();
+            };
+        }
+
+        function stopAudio() {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+            isPlaying = false;
+            playQueue = [];
+            document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
+        }
+
+        // --- 搜尋邏輯 ---
+        function handleSearch(keyword) {
+            keyword = keyword.trim();
+            const controlBar = document.getElementById("playbackControls");
+            
+            if (keyword === "") {
+                document.getElementById("read-view").style.display = "block";
+                document.getElementById("search-view").style.display = "none";
+                controlBar.style.display = "flex"; // 恢復播放列
+                return;
+            }
+
+            document.getElementById("read-view").style.display = "none";
+            document.getElementById("search-view").style.display = "block";
+            controlBar.style.display = "none"; // 搜尋時隱藏播放列
+
+            const resultsContent = document.getElementById("search-results-content");
+            const results = allScriptures.filter(s => s.text.includes(keyword));
+
+            if (results.length === 0) {
+                resultsContent.innerHTML = "<p style='text-align:center; color:#999;'>找不到。</p>";
+                return;
+            }
+
+            resultsContent.innerHTML = `<p style="padding:0 5px; color:#666; font-size:0.9em;">共 ${results.length} 筆 (顯示前 100 筆)</p>`;
+            
+            results.slice(0, 100).forEach(res => {
+                const div = document.createElement("div");
+                div.className = "search-result-item";
+                const highlightedText = res.text.replaceAll(keyword, `<span class="highlight">${keyword}</span>`);
+                
+                div.innerHTML = `
+                    <div style="font-weight:bold; color:#7f8c8d; margin-bottom:5px;">
+                        ${res.book} ${res.chapter}:${res.verse}
+                    </div>
+                    <div>${highlightedText}</div>
+                `;
+                
+                div.onclick = () => {
+                    const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
+                    selectBook(bookIndex);
+                    loadChapterText(res.book, res.chapter);
+                    
+                    setTimeout(() => {
+                        const targetRow = document.getElementById(`verse-row-${res.id}`);
+                        if(targetRow) {
+                            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            targetRow.classList.add('playing'); // 借用高亮樣式閃一下
+                            setTimeout(() => targetRow.classList.remove('playing'), 2000);
+                        }
+                    }, 100);
+                };
+                resultsContent.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
