@@ -579,9 +579,9 @@
 
             // 2. 設定一個「只執行一次」的監聽器
             // 'canplay' 代表瀏覽器已經抓到足夠的資料，可以開始播放了
-            currentAudio.oncanplay = function () {
+            currentAudio.oncanplaythrough = function () {
                 // 解除監聽，避免重複觸發
-                currentAudio.oncanplay = null;
+                currentAudio.oncanplaythrough = null;
 
                 // 3. 這時候才正式播放
                 var playPromise = currentAudio.play();
@@ -592,12 +592,32 @@
                         console.log("播放被瀏覽器阻擋 (需使用者互動):", error);
                     });
                 }
+                preloadNextFile();
             };
 
             // 4. 播放結束後接下一首
             currentAudio.onended = () => {
                 playNextInQueue();
             };
+        }
+
+        // --- 新增 helper 函式：預先載入下一首 ---
+        function preloadNextFile() {
+            // 如果清單裡還有下一首
+            if (playQueue.length > 0) {
+                const nextId = playQueue[0]; // 偷看一下下一首的 ID
+                
+                // 組出下一首的網址
+                const fileName = String(nextId).padStart(3, '0') + ".mp3";
+                const R2_BASE_URL = "https://pub-47d6ef43a3ce4f65866a62c456a8ee42.r2.dev"; // ★ 這裡也要填網址
+                const nextPath = `${R2_BASE_URL}/${fileName}`;
+                
+                // 建立一個隱形的 Audio 物件來下載資料
+                const preload = new Audio();
+                preload.src = nextPath;
+                preload.load(); // 瀏覽器會把它存進快取 (Cache)
+                // 這樣等到真的要播這一首時，就是秒開！
+            }
         }
 
         function stopAudio() {
