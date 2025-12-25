@@ -573,8 +573,28 @@
             }
 
             currentAudio.src = filePath;
-            currentAudio.play();
 
+            // 1. 強制讓瀏覽器先載入，不要馬上播
+            currentAudio.load();
+
+            // 2. 設定一個「只執行一次」的監聽器
+            // 'canplay' 代表瀏覽器已經抓到足夠的資料，可以開始播放了
+            currentAudio.oncanplay = function () {
+                // 解除監聽，避免重複觸發
+                currentAudio.oncanplay = null;
+
+                // 3. 這時候才正式播放
+                var playPromise = currentAudio.play();
+
+                // 處理部分瀏覽器禁止自動播放的錯誤
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log("播放被瀏覽器阻擋 (需使用者互動):", error);
+                    });
+                }
+            };
+
+            // 4. 播放結束後接下一首
             currentAudio.onended = () => {
                 playNextInQueue();
             };
