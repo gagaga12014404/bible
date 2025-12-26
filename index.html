@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>有聲聖經 (範圍播放版)</title>
+    <title>有聲聖經 (變速播放版)</title>
     <style>
         /* --- 基礎設定 --- */
         body {
@@ -128,7 +128,7 @@
             user-select: none;
         }
 
-        /* --- 播放控制列 (新功能) --- */
+        /* --- 播放控制列 --- */
         .playback-control-bar {
             background: #fff;
             padding: 15px;
@@ -150,6 +150,13 @@
             border-radius: 5px;
             text-align: center;
             font-size: 16px;
+        }
+        
+        /* 新增：速度下拉選單樣式微調 */
+        select.control-input {
+            width: auto; /* 讓寬度適應文字 */
+            cursor: pointer;
+            background-color: #f9f9f9;
         }
 
         .btn-play {
@@ -279,6 +286,17 @@
                 <span>節 — 第</span>
                 <input type="number" id="endVerseInput" class="control-input" min="1" value="1">
                 <span>節</span>
+                
+                <span style="margin-left: 10px;">速度</span>
+                <select id="speedSelect" class="control-input" onchange="changeSpeed(this.value)">
+                    <option value="1" selected>1.0x</option>
+                    <option value="1.1">1.1x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.35">1.35x</option>
+                    <option value="1.4">1.4x</option>
+                    <option value="1.5">1.5x</option>
+                </select>
+
                 <button class="btn-play" onclick="playRange()">▶ 播放</button>
                 <button class="btn-stop" onclick="stopAudio()">⏹</button>
             </div>
@@ -361,12 +379,14 @@
         let allScriptures = [];
         let currentChapterVerses = []; // 暫存當前章節的經文資料，方便播放
 
-        // --- 全域變數：音訊播放相關 (修改後) ---
-        // let currentAudio = new Audio(); // 刪除這行，不需要 Audio 物件了
+        // --- 全域變數：音訊播放相關 ---
         let playQueue = []; // 待播放清單
         let isPlaying = false;
         let synthesis = window.speechSynthesis; // 瀏覽器合成語音物件
         let currentUtterance = null; // 當前正在說話的物件
+        
+        // 新增：目前語速 (預設 1.0)
+        let currentSpeed = 1.0;
 
         document.addEventListener("DOMContentLoaded", async () => {
             renderBookNav();
@@ -522,8 +542,14 @@
             window.scrollTo({ top: 0 });
         }
 
+        // --- 新增：變更速度函式 ---
+        function changeSpeed(val) {
+            currentSpeed = parseFloat(val);
+            // 註：若正在播放中，這個設定會在下一節經文開始時生效
+            // 這樣做比強制停止當前經文更穩定
+        }
+
         // --- 音訊播放邏輯 (範圍播放) ---
-        // --- 修改後的播放邏輯 (改用 TTS) ---
 
         function playRange() {
             const startVal = parseInt(document.getElementById("startVerseInput").value);
@@ -565,7 +591,6 @@
             const currentRow = document.getElementById(`verse-row-${verseObj.id}`);
             if (currentRow) {
                 currentRow.classList.add('playing');
-                currentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
 
             // --- TTS 發聲邏輯 ---
@@ -575,7 +600,10 @@
 
             // 設定語言
             utterance.lang = 'zh-TW';
-            utterance.rate = 1.0; // 語速 (0.1 ~ 10)
+            
+            // --- 修改：使用變數設定速度 ---
+            utterance.rate = currentSpeed; 
+            
             utterance.pitch = 1.0; // 音調
 
             // ★ 聲音選擇：Google/Siri 優先版 ★
@@ -586,7 +614,6 @@
             preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Google'));
 
             // 第二順位：找 "Apple" 或 "Siri" (蘋果體系) -> 只有 iPhone/Mac 有
-            // (iOS 有時候名字不叫 Siri，但通常是系統預設，會在最後的保底被抓到)
             if (!preferredVoice) {
                 preferredVoice = voices.find(v => v.lang === 'zh-TW' && (v.name.includes('Apple') || v.name.includes('Siri')));
             }
