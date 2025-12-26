@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>有聲聖經 (使用者優化版)</title>
+    <title>有聲聖經 (多關鍵字搜尋版)</title>
     <style>
         /* --- 基礎設定 --- */
         body {
@@ -151,7 +151,7 @@
             text-align: center;
             font-size: 16px;
         }
-
+        
         select.control-input {
             width: auto;
             cursor: pointer;
@@ -244,17 +244,17 @@
             margin-bottom: 10px;
             border-radius: 8px;
             cursor: pointer;
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.15);
             font-size: 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             transition: transform 0.1s;
         }
-
+        
         .book-result-item:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 5px 10px rgba(0,0,0,0.2);
         }
 
         .book-result-item span {
@@ -300,7 +300,7 @@
 
     <nav class="navbar">
         <div class="search-container">
-            <input type="text" id="searchInput" class="search-input" placeholder="輸入關鍵字自動搜尋..."
+            <input type="text" id="searchInput" class="search-input" placeholder="輸入關鍵字 (空格可分隔，如: 掃羅 逼迫)"
                 oninput="handleSearch(this.value)" disabled>
         </div>
     </nav>
@@ -322,7 +322,7 @@
                 <span>節 — 第</span>
                 <input type="number" id="endVerseInput" class="control-input" min="1" value="1">
                 <span>節</span>
-
+                
                 <span style="margin-left: 10px;">速度</span>
                 <select id="speedSelect" class="control-input" onchange="changeSpeed(this.value)">
                     <option value="1" selected>1.0x</option>
@@ -412,11 +412,11 @@
         ];
 
         let allScriptures = [];
-        let currentChapterVerses = [];
-        let playQueue = [];
+        let currentChapterVerses = []; 
+        let playQueue = []; 
         let isPlaying = false;
-        let synthesis = window.speechSynthesis;
-        let currentUtterance = null;
+        let synthesis = window.speechSynthesis; 
+        let currentUtterance = null; 
         let currentSpeed = 1.0;
 
         document.addEventListener("DOMContentLoaded", async () => {
@@ -502,7 +502,7 @@
                 const link = document.createElement("div");
                 link.className = "chapter-link";
                 link.textContent = displayNum;
-
+                
                 link.onclick = () => {
                     updateChapterActiveState(link);
                     loadChapterText(currentBook.book, chapterNum);
@@ -547,13 +547,13 @@
 
             startInput.max = totalVerses;
             endInput.max = totalVerses;
-            startInput.value = 1;
-            endInput.value = totalVerses;
+            startInput.value = 1;           
+            endInput.value = totalVerses;   
 
             currentChapterVerses.forEach(v => {
                 const row = document.createElement("div");
                 row.className = "verse-row";
-                row.id = `verse-row-${v.id}`;
+                row.id = `verse-row-${v.id}`; 
                 row.innerHTML = `<span class="verse-num">${v.verse}</span>${v.text}`;
                 container.appendChild(row);
             });
@@ -599,11 +599,11 @@
                 // 不自動捲動
             }
 
-            const textToSpeak = `${verseObj.text}`;
+            const textToSpeak = `${verseObj.text}`; 
             const utterance = new SpeechSynthesisUtterance(textToSpeak);
 
             utterance.lang = 'zh-TW';
-            utterance.rate = currentSpeed;
+            utterance.rate = currentSpeed; 
             utterance.pitch = 1.0;
 
             const voices = synthesis.getVoices();
@@ -617,7 +617,7 @@
 
             utterance.onend = function () {
                 if (isPlaying) {
-                    playNextInQueue();
+                    playNextInQueue(); 
                 }
             };
 
@@ -635,13 +635,14 @@
             isPlaying = false;
             playQueue = [];
             if (currentUtterance) {
-                currentUtterance.onend = null;
+                currentUtterance.onend = null; 
                 currentUtterance = null;
             }
-            synthesis.cancel();
+            synthesis.cancel(); 
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
         }
 
+        // --- 核心修改：多關鍵字搜尋 ---
         function handleSearch(keyword) {
             keyword = keyword.trim();
             const controlBar = document.getElementById("playbackControls");
@@ -649,37 +650,49 @@
             if (keyword === "") {
                 document.getElementById("read-view").style.display = "block";
                 document.getElementById("search-view").style.display = "none";
-                controlBar.style.display = "flex";
+                controlBar.style.display = "flex"; 
                 return;
             }
 
             document.getElementById("read-view").style.display = "none";
             document.getElementById("search-view").style.display = "block";
-            controlBar.style.display = "none";
+            controlBar.style.display = "none"; 
 
             const resultsContent = document.getElementById("search-results-content");
             resultsContent.innerHTML = "";
 
-            const digitMatch = keyword.match(/(\d+)$/);
-            let searchBook = keyword;
+            // 1. 關鍵字拆分 (支援多個空白)
+            // 將輸入字串依據空白切割成陣列，並過濾掉空字串
+            const keywords = keyword.split(/\s+/).filter(k => k.length > 0);
+
+            // 如果沒有有效關鍵字，直接返回
+            if (keywords.length === 0) return;
+
+            // --- A. 書卷導航 ---
+            // 這裡我們只用"第一個"關鍵字來做書卷搜尋，或者看是否有符合的書卷
+            // 為了簡化，如果使用者輸入 "約伯記 5"，我們嘗試解析最後一個是否為數字
+            
+            let searchBook = keywords[0]; // 預設拿第一個詞搜書卷
             let searchChapter = null;
 
+            // 嘗試從原始 keyword 判斷是否結尾有數字
+            const digitMatch = keyword.match(/(\d+)$/);
             if (digitMatch) {
                 searchChapter = parseInt(digitMatch[1]);
+                // 把數字拿掉，剩下的部份去空白，當作書名
                 searchBook = keyword.replace(digitMatch[0], '').trim();
             }
 
-            // --- 書卷導航 (使用您的邏輯) ---
             const matchedBooks = bibleDataStructure.filter(b => b.book.includes(searchBook));
-
+            
             if (matchedBooks.length > 0) {
                 const bookSection = document.createElement("div");
                 bookSection.innerHTML = `<div class="search-section-title">書卷導航</div>`;
-
+                
                 matchedBooks.forEach(bookItem => {
                     const div = document.createElement("div");
                     div.className = "book-result-item";
-
+                    
                     let targetCh = 1;
                     let displayText = `📖 前往：${bookItem.book}`;
 
@@ -693,12 +706,11 @@
                     }
 
                     div.innerHTML = `<span>${displayText}</span><span class="book-result-arrow">➜</span>`;
-
-                    // --- 採用您的直覺式寫法 ---
+                    
                     div.onclick = () => {
                         const bookIndex = bibleDataStructure.findIndex(b => b.book === bookItem.book);
                         selectBook(bookIndex); // 先建立書卷 (會預設第1章)
-
+                        
                         // 接著馬上覆蓋成目標章節
                         updateChapterActiveState(
                             Array.from(document.getElementById("chapterContainer").children)[targetCh - 1]
@@ -710,21 +722,32 @@
                 resultsContent.appendChild(bookSection);
             }
 
-            // --- 經文搜尋 (使用您的邏輯) ---
-            const verseResults = allScriptures.filter(s => s.text.includes(keyword));
-            const verseSection = document.createElement("div");
+            // --- B. 經文搜尋 (多關鍵字 AND 邏輯) ---
+            // 過濾條件：所有關鍵字 (every) 都必須出現在 text 中
+            const verseResults = allScriptures.filter(s => {
+                return keywords.every(k => s.text.includes(k));
+            });
 
+            const verseSection = document.createElement("div");
+            
             if (verseResults.length === 0) {
                 if (matchedBooks.length === 0) {
                     verseSection.innerHTML = "<p style='text-align:center; color:#999; margin-top:20px;'>找不到符合的書卷或經文。</p>";
                 }
             } else {
                 verseSection.innerHTML = `<div class="search-section-title">經文結果 (共 ${verseResults.length} 筆)</div>`;
+                
+                // 為了高亮所有關鍵字，建立一個正規表達式
+                // 需對關鍵字做 escape (避免有人搜尋 "?" 或 "(" 導致錯誤)
+                const escapedKeywords = keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+                const highlightRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'g');
 
                 verseResults.slice(0, 100).forEach(res => {
                     const div = document.createElement("div");
                     div.className = "search-result-item";
-                    const highlightedText = res.text.replaceAll(keyword, `<span class="highlight">${keyword}</span>`);
+                    
+                    // 多重高亮
+                    const highlightedText = res.text.replace(highlightRegex, `<span class="highlight">$1</span>`);
 
                     div.innerHTML = `
                         <div style="font-weight:bold; color:#7f8c8d; margin-bottom:5px;">
@@ -733,7 +756,6 @@
                         <div>${highlightedText}</div>
                     `;
 
-                    // --- 您提供的優化程式碼 ---
                     div.onclick = () => {
                         const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
                         selectBook(bookIndex);
@@ -746,7 +768,7 @@
                             const targetRow = document.getElementById(`verse-row-${res.id}`);
                             if (targetRow) {
                                 targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                targetRow.classList.add('playing');
+                                targetRow.classList.add('playing'); 
                                 setTimeout(() => targetRow.classList.remove('playing'), 2000);
                             }
                         }, 100);
