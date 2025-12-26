@@ -151,7 +151,7 @@
             text-align: center;
             font-size: 16px;
         }
-        
+
         /* 新增：速度下拉選單樣式微調 */
         select.control-input {
             width: auto; /* 讓寬度適應文字 */
@@ -286,7 +286,7 @@
                 <span>節 — 第</span>
                 <input type="number" id="endVerseInput" class="control-input" min="1" value="1">
                 <span>節</span>
-                
+
                 <span style="margin-left: 10px;">速度</span>
                 <select id="speedSelect" class="control-input" onchange="changeSpeed(this.value)">
                     <option value="1" selected>1.0x</option>
@@ -384,7 +384,7 @@
         let isPlaying = false;
         let synthesis = window.speechSynthesis; // 瀏覽器合成語音物件
         let currentUtterance = null; // 當前正在說話的物件
-        
+
         // 新增：目前語速 (預設 1.0)
         let currentSpeed = 1.0;
 
@@ -600,10 +600,10 @@
 
             // 設定語言
             utterance.lang = 'zh-TW';
-            
+
             // --- 修改：使用變數設定速度 ---
-            utterance.rate = currentSpeed; 
-            
+            utterance.rate = currentSpeed;
+
             utterance.pitch = 1.0; // 音調
 
             // ★ 聲音選擇：Google/Siri 優先版 ★
@@ -659,7 +659,7 @@
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
         }
 
-        // --- 搜尋邏輯 ---
+        // --- 搜尋邏輯 (已修改：支援書卷優先搜尋) ---
         function handleSearch(keyword) {
             keyword = keyword.trim();
             const controlBar = document.getElementById("playbackControls");
@@ -676,43 +676,73 @@
             controlBar.style.display = "none"; // 搜尋時隱藏播放列
 
             const resultsContent = document.getElementById("search-results-content");
-            const results = allScriptures.filter(s => s.text.includes(keyword));
+            resultsContent.innerHTML = "";
 
-            if (results.length === 0) {
-                resultsContent.innerHTML = "<p style='text-align:center; color:#999;'>找不到。</p>";
-                return;
+            // --- 1. 搜尋書卷名 (優先) ---
+            const matchedBooks = bibleDataStructure.filter(b => b.book.includes(keyword));
+
+            if (matchedBooks.length > 0) {
+                const bookSection = document.createElement("div");
+                bookSection.innerHTML = `<div class="search-section-title">書卷導航</div>`;
+
+                matchedBooks.forEach(bookItem => {
+                    const div = document.createElement("div");
+                    div.className = "book-result-item";
+                    div.innerHTML = `
+                        <span>📖 前往：${bookItem.book}</span>
+                        <span class="book-result-arrow">➜</span>
+                    `;
+                    div.onclick = () => {
+                        // 找出正確的 index 並跳轉
+                        const idx = bibleDataStructure.findIndex(b => b.book === bookItem.book);
+                        selectBook(idx);
+                    };
+                    bookSection.appendChild(div);
+                });
+                resultsContent.appendChild(bookSection);
             }
 
-            resultsContent.innerHTML = `<p style="padding:0 5px; color:#666; font-size:0.9em;">共 ${results.length} 筆 (顯示前 100 筆)</p>`;
+            // --- 2. 搜尋經文內文 ---
+            const verseResults = allScriptures.filter(s => s.text.includes(keyword));
 
-            results.slice(0, 100).forEach(res => {
-                const div = document.createElement("div");
-                div.className = "search-result-item";
-                const highlightedText = res.text.replaceAll(keyword, `<span class="highlight">${keyword}</span>`);
+            const verseSection = document.createElement("div");
 
-                div.innerHTML = `
-                    <div style="font-weight:bold; color:#7f8c8d; margin-bottom:5px;">
-                        ${res.book} ${res.chapter}:${res.verse}
-                    </div>
-                    <div>${highlightedText}</div>
-                `;
+            if (verseResults.length === 0) {
+                verseSection.innerHTML = "<p style='text-align:center; color:#999; margin-top:20px;'>找不到符合的經文。</p>";
+            } else {
+                verseSection.innerHTML = `<div class="search-section-title">經文結果 (共 ${verseResults.length} 筆)</div>`;
 
-                div.onclick = () => {
-                    const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
-                    selectBook(bookIndex);
-                    loadChapterText(res.book, res.chapter);
+                // 只顯示前 100 筆避免卡頓
+                verseResults.slice(0, 100).forEach(res => {
+                    const div = document.createElement("div");
+                    div.className = "search-result-item";
+                    const highlightedText = res.text.replaceAll(keyword, `<span class="highlight">${keyword}</span>`);
 
-                    setTimeout(() => {
-                        const targetRow = document.getElementById(`verse-row-${res.id}`);
-                        if (targetRow) {
-                            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            targetRow.classList.add('playing'); // 借用高亮樣式閃一下
-                            setTimeout(() => targetRow.classList.remove('playing'), 2000);
-                        }
-                    }, 100);
-                };
-                resultsContent.appendChild(div);
-            });
+                    div.innerHTML = `
+                        <div style="font-weight:bold; color:#7f8c8d; margin-bottom:5px;">
+                            ${res.book} ${res.chapter}:${res.verse}
+                        </div>
+                        <div>${highlightedText}</div>
+                    `;
+
+                    div.onclick = () => {
+                        const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
+                        selectBook(bookIndex);
+                        loadChapterText(res.book, res.chapter);
+
+                        setTimeout(() => {
+                            const targetRow = document.getElementById(`verse-row-${res.id}`);
+                            if (targetRow) {
+                                targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                targetRow.classList.add('playing'); // 借用高亮樣式閃一下
+                                setTimeout(() => targetRow.classList.remove('playing'), 2000);
+                            }
+                        }, 100);
+                    };
+                    verseSection.appendChild(div);
+                });
+            }
+            resultsContent.appendChild(verseSection);
         }
     </script>
 </body>
