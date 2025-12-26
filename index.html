@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>有聲聖經 (變速播放版)</title>
+    <title>有聲聖經 (使用者優化版)</title>
     <style>
         /* --- 基礎設定 --- */
         body {
@@ -152,9 +152,8 @@
             font-size: 16px;
         }
 
-        /* 新增：速度下拉選單樣式微調 */
         select.control-input {
-            width: auto; /* 讓寬度適應文字 */
+            width: auto;
             cursor: pointer;
             background-color: #f9f9f9;
         }
@@ -228,7 +227,45 @@
             font-weight: normal;
         }
 
-        /* 搜尋結果 */
+        /* 搜尋結果樣式 */
+        .search-section-title {
+            margin: 20px 0 10px 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+            font-weight: bold;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        .book-result-item {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.1s;
+        }
+
+        .book-result-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .book-result-item span {
+            font-weight: bold;
+        }
+
+        .book-result-arrow {
+            font-size: 20px;
+            opacity: 0.8;
+        }
+
         .search-result-item {
             background: #fff;
             padding: 15px;
@@ -272,7 +309,6 @@
 
     <div class="main-content">
         <div id="search-view" style="display: none;">
-            <h2 style="text-align: center; color: #555;">搜尋結果</h2>
             <div id="search-results-content"></div>
         </div>
 
@@ -290,11 +326,10 @@
                 <span style="margin-left: 10px;">速度</span>
                 <select id="speedSelect" class="control-input" onchange="changeSpeed(this.value)">
                     <option value="1" selected>1.0x</option>
-                    <option value="1.1">1.1x</option>
                     <option value="1.25">1.25x</option>
-                    <option value="1.35">1.35x</option>
-                    <option value="1.4">1.4x</option>
                     <option value="1.5">1.5x</option>
+                    <option value="1.75">1.75x</option>
+                    <option value="2">2.0x</option>
                 </select>
 
                 <button class="btn-play" onclick="playRange()">▶ 播放</button>
@@ -377,15 +412,11 @@
         ];
 
         let allScriptures = [];
-        let currentChapterVerses = []; // 暫存當前章節的經文資料，方便播放
-
-        // --- 全域變數：音訊播放相關 ---
-        let playQueue = []; // 待播放清單
+        let currentChapterVerses = [];
+        let playQueue = [];
         let isPlaying = false;
-        let synthesis = window.speechSynthesis; // 瀏覽器合成語音物件
-        let currentUtterance = null; // 當前正在說話的物件
-
-        // 新增：目前語速 (預設 1.0)
+        let synthesis = window.speechSynthesis;
+        let currentUtterance = null;
         let currentSpeed = 1.0;
 
         document.addEventListener("DOMContentLoaded", async () => {
@@ -410,7 +441,6 @@
             }
         });
 
-        // 解析邏輯 (含 ID)
         function parseBibleText(rawText) {
             const lines = rawText.split(/\r?\n/);
             let lineIdx = 0;
@@ -423,7 +453,6 @@
                     const realChapter = chapIdx + 1;
                     for (let v = 1; v <= verseCount; v++) {
                         if (lineIdx >= totalLines) return;
-
                         allScriptures.push({
                             book: bookName,
                             chapter: realChapter,
@@ -431,7 +460,6 @@
                             text: lines[lineIdx].trim(),
                             id: globalAudioIndex
                         });
-
                         globalAudioIndex++;
                         lineIdx++;
                     }
@@ -439,11 +467,9 @@
             });
         }
 
-        // --- UI: 橫向書卷選單 ---
         function renderBookNav() {
             const navContainer = document.getElementById("bookNav");
             navContainer.innerHTML = "";
-
             bibleDataStructure.forEach((item, index) => {
                 const span = document.createElement("span");
                 span.className = "book-nav-item";
@@ -453,7 +479,7 @@
             });
         }
 
-        // --- 選擇書卷 ---
+        // --- selectBook 回歸單純模式 ---
         function selectBook(index) {
             document.getElementById("read-view").style.display = "block";
             document.getElementById("search-view").style.display = "none";
@@ -462,13 +488,11 @@
             const currentBook = bibleDataStructure[index];
             document.getElementById("currentBookTitle").textContent = currentBook.book;
 
-            // 更新導覽列樣式
             const navItems = document.querySelectorAll('.book-nav-item');
             navItems.forEach(item => item.classList.remove('active'));
             navItems[index].classList.add('active');
             navItems[index].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 
-            // 產生章節按鈕
             const container = document.getElementById("chapterContainer");
             container.innerHTML = "";
 
@@ -478,10 +502,13 @@
                 const link = document.createElement("div");
                 link.className = "chapter-link";
                 link.textContent = displayNum;
+
                 link.onclick = () => {
                     updateChapterActiveState(link);
                     loadChapterText(currentBook.book, chapterNum);
                 };
+
+                // 預設第一章高亮
                 if (i === 0) {
                     link.style.backgroundColor = "#2c3e50";
                     link.style.color = "#fff";
@@ -489,10 +516,12 @@
                 container.appendChild(link);
             });
 
+            // 預設載入第一章
             loadChapterText(currentBook.book, 1);
         }
 
         function updateChapterActiveState(activeLink) {
+            if (!activeLink) return;
             document.querySelectorAll('.chapter-link').forEach(el => {
                 el.style.backgroundColor = "#e6c59b";
                 el.style.backgroundImage = "linear-gradient(to top, #e6c59b 0%, #f5deb3 100%)";
@@ -502,54 +531,40 @@
             activeLink.style.color = "#fff";
         }
 
-        // --- 載入經文 (純文字模式，並設定播放範圍輸入框) ---
         function loadChapterText(bookName, chapterNum) {
-            // 1. 顯示控制列
             const controlBar = document.getElementById("playbackControls");
             controlBar.style.display = "flex";
 
-            // 2. 清空並填充經文
             const container = document.getElementById("scriptureText");
             container.style.display = "block";
             container.innerHTML = "";
 
-            // 取得當前章節所有經文
             currentChapterVerses = allScriptures.filter(s => s.book === bookName && s.chapter === chapterNum);
 
-            // 更新播放輸入框的範圍限制
             const totalVerses = currentChapterVerses.length;
             const startInput = document.getElementById("startVerseInput");
             const endInput = document.getElementById("endVerseInput");
 
             startInput.max = totalVerses;
             endInput.max = totalVerses;
-            startInput.value = 1;           // 預設從第1節
-            endInput.value = totalVerses;   // 預設到最後一節
+            startInput.value = 1;
+            endInput.value = totalVerses;
 
-            // 渲染經文列表
             currentChapterVerses.forEach(v => {
                 const row = document.createElement("div");
                 row.className = "verse-row";
-                row.id = `verse-row-${v.id}`; // 方便播放時高亮
-
-                // 這裡只顯示純文字，不加按鈕
+                row.id = `verse-row-${v.id}`;
                 row.innerHTML = `<span class="verse-num">${v.verse}</span>${v.text}`;
                 container.appendChild(row);
             });
 
-            // 切換章節時停止上一段音訊
             stopAudio();
             window.scrollTo({ top: 0 });
         }
 
-        // --- 新增：變更速度函式 ---
         function changeSpeed(val) {
             currentSpeed = parseFloat(val);
-            // 註：若正在播放中，這個設定會在下一節經文開始時生效
-            // 這樣做比強制停止當前經文更穩定
         }
-
-        // --- 音訊播放邏輯 (範圍播放) ---
 
         function playRange() {
             const startVal = parseInt(document.getElementById("startVerseInput").value);
@@ -561,90 +576,54 @@
                 return;
             }
 
-            // 建立播放清單 (儲存整個經文物件，因為我們需要 text 內容)
-            const versesToPlay = currentChapterVerses.slice(startVal - 1, endVal);
-
-            // 停止當前任何發聲
             stopAudio();
-
-            // 複製清單
+            const versesToPlay = currentChapterVerses.slice(startVal - 1, endVal);
             playQueue = [...versesToPlay];
             isPlaying = true;
-
-            // 開始播放
             playNextInQueue();
         }
 
         function playNextInQueue() {
-            // 如果清單播完了，或被強制停止
             if (!isPlaying || playQueue.length === 0) {
                 isPlaying = false;
                 stopAudio();
                 return;
             }
 
-            // 取出下一節經文物件
             const verseObj = playQueue.shift();
 
-            // --- UI 高亮處理 (維持原樣) ---
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
             const currentRow = document.getElementById(`verse-row-${verseObj.id}`);
             if (currentRow) {
                 currentRow.classList.add('playing');
+                // 不自動捲動
             }
 
-            // --- TTS 發聲邏輯 ---
-            // 建立發聲請求
-            const textToSpeak = `${verseObj.text}`; // 您可以在這裡加上 "第幾節" 的前綴，例如: `第${verseObj.verse}節。${verseObj.text}`
+            const textToSpeak = `${verseObj.text}`;
             const utterance = new SpeechSynthesisUtterance(textToSpeak);
 
-            // 設定語言
             utterance.lang = 'zh-TW';
-
-            // --- 修改：使用變數設定速度 ---
             utterance.rate = currentSpeed;
+            utterance.pitch = 1.0;
 
-            utterance.pitch = 1.0; // 音調
-
-            // ★ 聲音選擇：Google/Siri 優先版 ★
             const voices = synthesis.getVoices();
             let preferredVoice = null;
-
-            // 第一順位：找 "Google" (Google 小姐) -> 只有 Chrome 有
             preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Google'));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'zh-TW' && (v.name.includes('Apple') || v.name.includes('Siri')));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Meijia'));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'zh-TW');
 
-            // 第二順位：找 "Apple" 或 "Siri" (蘋果體系) -> 只有 iPhone/Mac 有
-            if (!preferredVoice) {
-                preferredVoice = voices.find(v => v.lang === 'zh-TW' && (v.name.includes('Apple') || v.name.includes('Siri')));
-            }
+            if (preferredVoice) utterance.voice = preferredVoice;
 
-            // 第三順位：如果上面都沒有，找 "Meijia" (美佳 - Mac 內建的另一個好聽女聲)
-            if (!preferredVoice) {
-                preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Meijia'));
-            }
-
-            // 第四順位：保底 (有什麼就用什麼，通常是微軟曉臻或手機預設聲音)
-            if (!preferredVoice) {
-                preferredVoice = voices.find(v => v.lang === 'zh-TW');
-            }
-
-            // 設定聲音
-            if (preferredVoice) {
-                utterance.voice = preferredVoice;
-                console.log("目前使用聲音:", preferredVoice.name);
-            }
-
-            // 當這一節唸完時，自動觸發下一節
             utterance.onend = function () {
                 if (isPlaying) {
-                    playNextInQueue(); // 遞迴呼叫下一首
+                    playNextInQueue();
                 }
             };
 
-            // 錯誤處理
             utterance.onerror = function (e) {
+                if (e.error === 'canceled') return;
                 console.error("語音播放錯誤", e);
-                // 發生錯誤時嘗試跳下一節，避免卡死
                 if (isPlaying) playNextInQueue();
             };
 
@@ -655,11 +634,14 @@
         function stopAudio() {
             isPlaying = false;
             playQueue = [];
-            synthesis.cancel(); // 瀏覽器 API 停止發聲
+            if (currentUtterance) {
+                currentUtterance.onend = null;
+                currentUtterance = null;
+            }
+            synthesis.cancel();
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
         }
 
-        // --- 搜尋邏輯 (已修改：支援書卷優先搜尋) ---
         function handleSearch(keyword) {
             keyword = keyword.trim();
             const controlBar = document.getElementById("playbackControls");
@@ -667,19 +649,28 @@
             if (keyword === "") {
                 document.getElementById("read-view").style.display = "block";
                 document.getElementById("search-view").style.display = "none";
-                controlBar.style.display = "flex"; // 恢復播放列
+                controlBar.style.display = "flex";
                 return;
             }
 
             document.getElementById("read-view").style.display = "none";
             document.getElementById("search-view").style.display = "block";
-            controlBar.style.display = "none"; // 搜尋時隱藏播放列
+            controlBar.style.display = "none";
 
             const resultsContent = document.getElementById("search-results-content");
             resultsContent.innerHTML = "";
 
-            // --- 1. 搜尋書卷名 (優先) ---
-            const matchedBooks = bibleDataStructure.filter(b => b.book.includes(keyword));
+            const digitMatch = keyword.match(/(\d+)$/);
+            let searchBook = keyword;
+            let searchChapter = null;
+
+            if (digitMatch) {
+                searchChapter = parseInt(digitMatch[1]);
+                searchBook = keyword.replace(digitMatch[0], '').trim();
+            }
+
+            // --- 書卷導航 (使用您的邏輯) ---
+            const matchedBooks = bibleDataStructure.filter(b => b.book.includes(searchBook));
 
             if (matchedBooks.length > 0) {
                 const bookSection = document.createElement("div");
@@ -688,31 +679,48 @@
                 matchedBooks.forEach(bookItem => {
                     const div = document.createElement("div");
                     div.className = "book-result-item";
-                    div.innerHTML = `
-                        <span>📖 前往：${bookItem.book}</span>
-                        <span class="book-result-arrow">➜</span>
-                    `;
+
+                    let targetCh = 1;
+                    let displayText = `📖 前往：${bookItem.book}`;
+
+                    if (searchChapter !== null) {
+                        if (searchChapter >= 1 && searchChapter <= bookItem.chapters.length) {
+                            targetCh = searchChapter;
+                            displayText = `📖 前往：${bookItem.book} 第 ${searchChapter} 章`;
+                        } else {
+                            displayText = `📖 前往：${bookItem.book} (找不到第${searchChapter}章)`;
+                        }
+                    }
+
+                    div.innerHTML = `<span>${displayText}</span><span class="book-result-arrow">➜</span>`;
+
+                    // --- 採用您的直覺式寫法 ---
                     div.onclick = () => {
-                        // 找出正確的 index 並跳轉
-                        const idx = bibleDataStructure.findIndex(b => b.book === bookItem.book);
-                        selectBook(idx);
+                        const bookIndex = bibleDataStructure.findIndex(b => b.book === bookItem.book);
+                        selectBook(bookIndex); // 先建立書卷 (會預設第1章)
+
+                        // 接著馬上覆蓋成目標章節
+                        updateChapterActiveState(
+                            Array.from(document.getElementById("chapterContainer").children)[targetCh - 1]
+                        );
+                        loadChapterText(bookItem.book, targetCh);
                     };
                     bookSection.appendChild(div);
                 });
                 resultsContent.appendChild(bookSection);
             }
 
-            // --- 2. 搜尋經文內文 ---
+            // --- 經文搜尋 (使用您的邏輯) ---
             const verseResults = allScriptures.filter(s => s.text.includes(keyword));
-
             const verseSection = document.createElement("div");
 
             if (verseResults.length === 0) {
-                verseSection.innerHTML = "<p style='text-align:center; color:#999; margin-top:20px;'>找不到符合的經文。</p>";
+                if (matchedBooks.length === 0) {
+                    verseSection.innerHTML = "<p style='text-align:center; color:#999; margin-top:20px;'>找不到符合的書卷或經文。</p>";
+                }
             } else {
                 verseSection.innerHTML = `<div class="search-section-title">經文結果 (共 ${verseResults.length} 筆)</div>`;
 
-                // 只顯示前 100 筆避免卡頓
                 verseResults.slice(0, 100).forEach(res => {
                     const div = document.createElement("div");
                     div.className = "search-result-item";
@@ -725,16 +733,20 @@
                         <div>${highlightedText}</div>
                     `;
 
+                    // --- 您提供的優化程式碼 ---
                     div.onclick = () => {
                         const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
                         selectBook(bookIndex);
+                        updateChapterActiveState(
+                            Array.from(document.getElementById("chapterContainer").children)[res.chapter - 1]
+                        );
                         loadChapterText(res.book, res.chapter);
 
                         setTimeout(() => {
                             const targetRow = document.getElementById(`verse-row-${res.id}`);
                             if (targetRow) {
                                 targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                targetRow.classList.add('playing'); // 借用高亮樣式閃一下
+                                targetRow.classList.add('playing');
                                 setTimeout(() => targetRow.classList.remove('playing'), 2000);
                             }
                         }, 100);
