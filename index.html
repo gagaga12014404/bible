@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>有聲聖經 (多關鍵字搜尋版)</title>
+    <title>有聲聖經 (前後章導航版)</title>
     <style>
         /* --- 基礎設定 --- */
         body {
@@ -195,6 +195,7 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            min-height: 200px;
         }
 
         .verse-row {
@@ -225,6 +226,40 @@
             vertical-align: super;
             user-select: none;
             font-weight: normal;
+        }
+
+        /* --- 底部導航按鈕 (新功能) --- */
+        .bottom-nav-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            padding-bottom: 40px;
+            gap: 20px;
+        }
+
+        .btn-nav {
+            flex: 1;
+            padding: 12px;
+            background-color: #34495e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .btn-nav:hover {
+            background-color: #2c3e50;
+        }
+
+        .btn-nav:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+            color: #95a5a6;
         }
 
         /* 搜尋結果樣式 */
@@ -337,6 +372,15 @@
             </div>
 
             <div id="scriptureText" class="scripture-content" style="display:none;"></div>
+
+            <div id="bottomNav" class="bottom-nav-container" style="display: none;">
+                <button id="btnPrevChap" class="btn-nav" onclick="prevChapter()">
+                    &laquo; 上一章
+                </button>
+                <button id="btnNextChap" class="btn-nav" onclick="nextChapter()">
+                    下一章 &raquo;
+                </button>
+            </div>
         </div>
     </div>
 
@@ -419,6 +463,10 @@
         let currentUtterance = null; 
         let currentSpeed = 1.0;
 
+        // 全域變數：紀錄當前讀到的書卷索引與章節
+        let curBookIdx = 0;
+        let curChapNum = 1;
+
         document.addEventListener("DOMContentLoaded", async () => {
             renderBookNav();
 
@@ -479,8 +527,11 @@
             });
         }
 
-        // --- selectBook 回歸單純模式 ---
+        // --- selectBook ---
         function selectBook(index) {
+            // 更新目前書卷索引
+            curBookIdx = index;
+
             document.getElementById("read-view").style.display = "block";
             document.getElementById("search-view").style.display = "none";
             document.getElementById("searchInput").value = "";
@@ -531,9 +582,25 @@
             activeLink.style.color = "#fff";
         }
 
+        // 輔助：根據章節數字自動高亮對應按鈕 (用於前後章跳轉)
+        function highlightCurrentChapterBtn(chapNum) {
+            const container = document.getElementById("chapterContainer");
+            // 因為 children 是從 0 開始，所以 第1章 對應 index 0
+            const targetBtn = container.children[chapNum - 1];
+            if (targetBtn) {
+                updateChapterActiveState(targetBtn);
+            }
+        }
+
         function loadChapterText(bookName, chapterNum) {
+            // 更新目前章節全域變數
+            curChapNum = chapterNum;
+
             const controlBar = document.getElementById("playbackControls");
             controlBar.style.display = "flex";
+            
+            // 顯示底部導航
+            document.getElementById("bottomNav").style.display = "flex";
 
             const container = document.getElementById("scriptureText");
             container.style.display = "block";
@@ -560,7 +627,78 @@
 
             stopAudio();
             window.scrollTo({ top: 0 });
+
+            // 更新底部按鈕狀態 (是否第一章/最後一章)
+            updateBottomNav();
         }
+
+        // --- 底部導航邏輯 ---
+        function updateBottomNav() {
+            const prevBtn = document.getElementById("btnPrevChap");
+            const nextBtn = document.getElementById("btnNextChap");
+            
+            // 判斷是否有上一章
+            // 條件：不是(第一卷書 且 第一章)
+            if (curBookIdx === 0 && curChapNum === 1) {
+                prevBtn.disabled = true;
+            } else {
+                prevBtn.disabled = false;
+            }
+
+            // 判斷是否有下一章
+            // 條件：不是(最後一卷書 且 最後一章)
+            const totalBooks = bibleDataStructure.length;
+            const currentBookTotalChaps = bibleDataStructure[curBookIdx].chapters.length;
+            
+            if (curBookIdx === totalBooks - 1 && curChapNum === currentBookTotalChaps) {
+                nextBtn.disabled = true;
+            } else {
+                nextBtn.disabled = false;
+            }
+        }
+
+        function prevChapter() {
+            // 1. 同一書卷，上一章
+            if (curChapNum > 1) {
+                const targetChap = curChapNum - 1;
+                const bookName = bibleDataStructure[curBookIdx].book;
+                highlightCurrentChapterBtn(targetChap);
+                loadChapterText(bookName, targetChap);
+            } 
+            // 2. 跨書卷，跳到上一卷書的最後一章
+            else if (curBookIdx > 0) {
+                const prevBookIdx = curBookIdx - 1;
+                const prevBookData = bibleDataStructure[prevBookIdx];
+                const targetChap = prevBookData.chapters.length; // 最後一章
+                
+                // 切換書卷 (會自動產生章節按鈕並載入第1章，所以我們要馬上覆蓋)
+                selectBook(prevBookIdx);
+                
+                // 覆蓋為最後一章
+                highlightCurrentChapterBtn(targetChap);
+                loadChapterText(prevBookData.book, targetChap);
+            }
+        }
+
+        function nextChapter() {
+            const currentBookTotalChaps = bibleDataStructure[curBookIdx].chapters.length;
+
+            // 1. 同一書卷，下一章
+            if (curChapNum < currentBookTotalChaps) {
+                const targetChap = curChapNum + 1;
+                const bookName = bibleDataStructure[curBookIdx].book;
+                highlightCurrentChapterBtn(targetChap);
+                loadChapterText(bookName, targetChap);
+            }
+            // 2. 跨書卷，跳到下一卷書的第1章
+            else if (curBookIdx < bibleDataStructure.length - 1) {
+                const nextBookIdx = curBookIdx + 1;
+                // selectBook 預設就是第1章，所以直接呼叫即可
+                selectBook(nextBookIdx);
+            }
+        }
+
+        // --- 其他功能 ---
 
         function changeSpeed(val) {
             currentSpeed = parseFloat(val);
@@ -642,44 +780,38 @@
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
         }
 
-        // --- 核心修改：多關鍵字搜尋 ---
         function handleSearch(keyword) {
             keyword = keyword.trim();
             const controlBar = document.getElementById("playbackControls");
+            const bottomNav = document.getElementById("bottomNav"); // 搜尋時隱藏底部導航
 
             if (keyword === "") {
                 document.getElementById("read-view").style.display = "block";
                 document.getElementById("search-view").style.display = "none";
-                controlBar.style.display = "flex"; 
+                controlBar.style.display = "flex";
+                bottomNav.style.display = "flex"; 
                 return;
             }
 
             document.getElementById("read-view").style.display = "none";
             document.getElementById("search-view").style.display = "block";
             controlBar.style.display = "none"; 
+            bottomNav.style.display = "none";
 
             const resultsContent = document.getElementById("search-results-content");
             resultsContent.innerHTML = "";
 
-            // 1. 關鍵字拆分 (支援多個空白)
-            // 將輸入字串依據空白切割成陣列，並過濾掉空字串
+            // 關鍵字拆分
             const keywords = keyword.split(/\s+/).filter(k => k.length > 0);
-
-            // 如果沒有有效關鍵字，直接返回
             if (keywords.length === 0) return;
 
-            // --- A. 書卷導航 ---
-            // 這裡我們只用"第一個"關鍵字來做書卷搜尋，或者看是否有符合的書卷
-            // 為了簡化，如果使用者輸入 "約伯記 5"，我們嘗試解析最後一個是否為數字
-            
-            let searchBook = keywords[0]; // 預設拿第一個詞搜書卷
+            // --- 書卷導航 ---
+            let searchBook = keywords[0]; 
             let searchChapter = null;
 
-            // 嘗試從原始 keyword 判斷是否結尾有數字
             const digitMatch = keyword.match(/(\d+)$/);
             if (digitMatch) {
                 searchChapter = parseInt(digitMatch[1]);
-                // 把數字拿掉，剩下的部份去空白，當作書名
                 searchBook = keyword.replace(digitMatch[0], '').trim();
             }
 
@@ -709,12 +841,9 @@
                     
                     div.onclick = () => {
                         const bookIndex = bibleDataStructure.findIndex(b => b.book === bookItem.book);
-                        selectBook(bookIndex); // 先建立書卷 (會預設第1章)
+                        selectBook(bookIndex); 
                         
-                        // 接著馬上覆蓋成目標章節
-                        updateChapterActiveState(
-                            Array.from(document.getElementById("chapterContainer").children)[targetCh - 1]
-                        );
+                        highlightCurrentChapterBtn(targetCh);
                         loadChapterText(bookItem.book, targetCh);
                     };
                     bookSection.appendChild(div);
@@ -722,8 +851,7 @@
                 resultsContent.appendChild(bookSection);
             }
 
-            // --- B. 經文搜尋 (多關鍵字 AND 邏輯) ---
-            // 過濾條件：所有關鍵字 (every) 都必須出現在 text 中
+            // --- 經文搜尋 ---
             const verseResults = allScriptures.filter(s => {
                 return keywords.every(k => s.text.includes(k));
             });
@@ -737,16 +865,12 @@
             } else {
                 verseSection.innerHTML = `<div class="search-section-title">經文結果 (共 ${verseResults.length} 筆)</div>`;
                 
-                // 為了高亮所有關鍵字，建立一個正規表達式
-                // 需對關鍵字做 escape (避免有人搜尋 "?" 或 "(" 導致錯誤)
                 const escapedKeywords = keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
                 const highlightRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'g');
 
                 verseResults.slice(0, 100).forEach(res => {
                     const div = document.createElement("div");
                     div.className = "search-result-item";
-                    
-                    // 多重高亮
                     const highlightedText = res.text.replace(highlightRegex, `<span class="highlight">$1</span>`);
 
                     div.innerHTML = `
@@ -759,9 +883,7 @@
                     div.onclick = () => {
                         const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
                         selectBook(bookIndex);
-                        updateChapterActiveState(
-                            Array.from(document.getElementById("chapterContainer").children)[res.chapter - 1]
-                        );
+                        highlightCurrentChapterBtn(res.chapter);
                         loadChapterText(res.book, res.chapter);
 
                         setTimeout(() => {
