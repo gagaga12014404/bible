@@ -252,7 +252,6 @@
 </head>
 
 <body>
-
     <div id="loading-msg">正在讀取聖經資料庫...</div>
 
     <nav class="navbar">
@@ -362,10 +361,12 @@
         let allScriptures = [];
         let currentChapterVerses = []; // 暫存當前章節的經文資料，方便播放
 
-        // --- 全域變數：音訊播放相關 ---
-        let currentAudio = new Audio();
+        // --- 全域變數：音訊播放相關 (修改後) ---
+        // let currentAudio = new Audio(); // 刪除這行，不需要 Audio 物件了
         let playQueue = []; // 待播放清單
         let isPlaying = false;
+        let synthesis = window.speechSynthesis; // 瀏覽器合成語音物件
+        let currentUtterance = null; // 當前正在說話的物件
 
         document.addEventListener("DOMContentLoaded", async () => {
             renderBookNav();
@@ -522,6 +523,7 @@
         }
 
         // --- 音訊播放邏輯 (範圍播放) ---
+        // --- 修改後的播放邏輯 (改用 TTS) ---
 
         function playRange() {
             const startVal = parseInt(document.getElementById("startVerseInput").value);
@@ -533,98 +535,100 @@
                 return;
             }
 
-            // 建立播放清單
-            // currentChapterVerses[0] 對應第 1 節
-            // 所以 slice 的索引是 startVal - 1 到 endVal
+            // 建立播放清單 (儲存整個經文物件，因為我們需要 text 內容)
             const versesToPlay = currentChapterVerses.slice(startVal - 1, endVal);
 
-            playQueue = versesToPlay.map(v => v.id); // 只需要 ID
+            // 停止當前任何發聲
+            stopAudio();
+
+            // 複製清單
+            playQueue = [...versesToPlay];
             isPlaying = true;
 
-            // 開始播放第一首
+            // 開始播放
             playNextInQueue();
         }
 
         function playNextInQueue() {
+            // 如果清單播完了，或被強制停止
             if (!isPlaying || playQueue.length === 0) {
                 isPlaying = false;
                 stopAudio();
                 return;
             }
 
-            const nextId = playQueue.shift();
-            // 補零邏輯 (例如 1 -> 001.mp3, 10 -> 010.mp3)
-            // 如果你的檔名是純數字 (例如 1.mp3) 不需要補零，請把 .padStart(3, '0') 拿掉
-            const fileName = String(nextId).padStart(3, '0') + ".mp3";
+            // 取出下一節經文物件
+            const verseObj = playQueue.shift();
 
-            // ★★★ 修改這裡：填入你的 Cloudflare R2 網址 ★★★
-            const R2_BASE_URL = "https://pub-47d6ef43a3ce4f65866a62c456a8ee42.r2.dev"; // ← 把這裡換成你剛剛複製的網址
-            console.log("播放檔案網址：", `${R2_BASE_URL}/${fileName}`);
-            // 組合出完整網址
-            const filePath = `${R2_BASE_URL}/${fileName}`;
-            // 清除上一節高亮
+            // --- UI 高亮處理 (維持原樣) ---
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
-            // 高亮當前
-            const currentRow = document.getElementById(`verse-row-${nextId}`);
+            const currentRow = document.getElementById(`verse-row-${verseObj.id}`);
             if (currentRow) {
                 currentRow.classList.add('playing');
-                // 自動捲動到正在播放的經文
                 currentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
 
-            currentAudio.src = filePath;
+            // --- TTS 發聲邏輯 ---
+            // 建立發聲請求
+            const textToSpeak = `${verseObj.text}`; // 您可以在這裡加上 "第幾節" 的前綴，例如: `第${verseObj.verse}節。${verseObj.text}`
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
 
-            // 1. 強制讓瀏覽器先載入，不要馬上播
-            currentAudio.load();
+            // 設定語言
+            utterance.lang = 'zh-TW';
+            utterance.rate = 1.0; // 語速 (0.1 ~ 10)
+            utterance.pitch = 1.0; // 音調
 
-            // 2. 設定一個「只執行一次」的監聽器
-            // 'canplay' 代表瀏覽器已經抓到足夠的資料，可以開始播放了
-            currentAudio.oncanplaythrough = function () {
-                // 解除監聽，避免重複觸發
-                currentAudio.oncanplaythrough = null;
+            // ★ 聲音選擇：Google/Siri 優先版 ★
+            const voices = synthesis.getVoices();
+            let preferredVoice = null;
 
-                // 3. 這時候才正式播放
-                var playPromise = currentAudio.play();
+            // 第一順位：找 "Google" (Google 小姐) -> 只有 Chrome 有
+            preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Google'));
 
-                // 處理部分瀏覽器禁止自動播放的錯誤
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        console.log("播放被瀏覽器阻擋 (需使用者互動):", error);
-                    });
-                }
-                preloadNextFile();
-            };
-
-            // 4. 播放結束後接下一首
-            currentAudio.onended = () => {
-                playNextInQueue();
-            };
-        }
-
-        // --- 新增 helper 函式：預先載入下一首 ---
-        function preloadNextFile() {
-            // 如果清單裡還有下一首
-            if (playQueue.length > 0) {
-                const nextId = playQueue[0]; // 偷看一下下一首的 ID
-                
-                // 組出下一首的網址
-                const fileName = String(nextId).padStart(3, '0') + ".mp3";
-                const R2_BASE_URL = "https://pub-47d6ef43a3ce4f65866a62c456a8ee42.r2.dev"; // ★ 這裡也要填網址
-                const nextPath = `${R2_BASE_URL}/${fileName}`;
-                
-                // 建立一個隱形的 Audio 物件來下載資料
-                const preload = new Audio();
-                preload.src = nextPath;
-                preload.load(); // 瀏覽器會把它存進快取 (Cache)
-                // 這樣等到真的要播這一首時，就是秒開！
+            // 第二順位：找 "Apple" 或 "Siri" (蘋果體系) -> 只有 iPhone/Mac 有
+            // (iOS 有時候名字不叫 Siri，但通常是系統預設，會在最後的保底被抓到)
+            if (!preferredVoice) {
+                preferredVoice = voices.find(v => v.lang === 'zh-TW' && (v.name.includes('Apple') || v.name.includes('Siri')));
             }
+
+            // 第三順位：如果上面都沒有，找 "Meijia" (美佳 - Mac 內建的另一個好聽女聲)
+            if (!preferredVoice) {
+                preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Meijia'));
+            }
+
+            // 第四順位：保底 (有什麼就用什麼，通常是微軟曉臻或手機預設聲音)
+            if (!preferredVoice) {
+                preferredVoice = voices.find(v => v.lang === 'zh-TW');
+            }
+
+            // 設定聲音
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+                console.log("目前使用聲音:", preferredVoice.name);
+            }
+
+            // 當這一節唸完時，自動觸發下一節
+            utterance.onend = function () {
+                if (isPlaying) {
+                    playNextInQueue(); // 遞迴呼叫下一首
+                }
+            };
+
+            // 錯誤處理
+            utterance.onerror = function (e) {
+                console.error("語音播放錯誤", e);
+                // 發生錯誤時嘗試跳下一節，避免卡死
+                if (isPlaying) playNextInQueue();
+            };
+
+            currentUtterance = utterance;
+            synthesis.speak(utterance);
         }
 
         function stopAudio() {
-            currentAudio.pause();
-            currentAudio.currentTime = 0;
             isPlaying = false;
             playQueue = [];
+            synthesis.cancel(); // 瀏覽器 API 停止發聲
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
         }
 
