@@ -228,7 +228,7 @@
             font-weight: normal;
         }
 
-        /* --- 底部導航按鈕 (新功能) --- */
+        /* --- 底部導航按鈕 --- */
         .bottom-nav-container {
             display: flex;
             justify-content: space-between;
@@ -260,6 +260,26 @@
             background-color: #bdc3c7;
             cursor: not-allowed;
             color: #95a5a6;
+        }
+
+        /* --- 載入更多按鈕 (新功能) --- */
+        .btn-load-more {
+            width: 100%;
+            padding: 15px;
+            margin-top: 15px;
+            background-color: #ecf0f1;
+            color: #7f8c8d;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        .btn-load-more:hover {
+            background-color: #bdc3c7;
+            color: #fff;
         }
 
         /* 搜尋結果樣式 */
@@ -335,7 +355,7 @@
 
     <nav class="navbar">
         <div class="search-container">
-            <input type="text" id="searchInput" class="search-input" placeholder="輸入關鍵字 (空格可分隔，如: 掃羅 逼迫)"
+            <input type="text" id="searchInput" class="search-input" placeholder="輸入關鍵字 (空格可分隔，如: 掃羅 你為何)"
                 oninput="handleSearch(this.value)" disabled>
         </div>
     </nav>
@@ -466,6 +486,12 @@
         // 全域變數：紀錄當前讀到的書卷索引與章節
         let curBookIdx = 0;
         let curChapNum = 1;
+
+        // --- 全域變數：搜尋分頁用 ---
+        let currentSearchResults = [];
+        let currentSearchKeywords = [];
+        let searchRenderCount = 0;
+        const SEARCH_BATCH_SIZE = 50;
 
         document.addEventListener("DOMContentLoaded", async () => {
             renderBookNav();
@@ -780,10 +806,12 @@
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
         }
 
+        // --- 核心修改：搜尋 + 載入更多 ---
+        
         function handleSearch(keyword) {
             keyword = keyword.trim();
             const controlBar = document.getElementById("playbackControls");
-            const bottomNav = document.getElementById("bottomNav"); // 搜尋時隱藏底部導航
+            const bottomNav = document.getElementById("bottomNav"); 
 
             if (keyword === "") {
                 document.getElementById("read-view").style.display = "block";
@@ -801,11 +829,11 @@
             const resultsContent = document.getElementById("search-results-content");
             resultsContent.innerHTML = "";
 
-            // 關鍵字拆分
+            // 1. 關鍵字拆分
             const keywords = keyword.split(/\s+/).filter(k => k.length > 0);
             if (keywords.length === 0) return;
 
-            // --- 書卷導航 ---
+            // --- 書卷導航 (保留) ---
             let searchBook = keywords[0]; 
             let searchChapter = null;
 
@@ -842,7 +870,6 @@
                     div.onclick = () => {
                         const bookIndex = bibleDataStructure.findIndex(b => b.book === bookItem.book);
                         selectBook(bookIndex); 
-                        
                         highlightCurrentChapterBtn(targetCh);
                         loadChapterText(bookItem.book, targetCh);
                     };
@@ -851,54 +878,97 @@
                 resultsContent.appendChild(bookSection);
             }
 
-            // --- 經文搜尋 ---
-            const verseResults = allScriptures.filter(s => {
+            // --- 經文搜尋 (支援分頁) ---
+            
+            // 1. 先篩選出所有符合的經文
+            currentSearchResults = allScriptures.filter(s => {
                 return keywords.every(k => s.text.includes(k));
             });
 
-            const verseSection = document.createElement("div");
+            // 2. 儲存關鍵字 (給渲染時高亮用)
+            currentSearchKeywords = keywords;
             
-            if (verseResults.length === 0) {
+            // 3. 重置計數器
+            searchRenderCount = 0;
+
+            const verseSection = document.createElement("div");
+            verseSection.id = "verse-search-container"; // 給分頁用
+            resultsContent.appendChild(verseSection); // 先把容器放上去
+
+            if (currentSearchResults.length === 0) {
                 if (matchedBooks.length === 0) {
                     verseSection.innerHTML = "<p style='text-align:center; color:#999; margin-top:20px;'>找不到符合的書卷或經文。</p>";
                 }
             } else {
-                verseSection.innerHTML = `<div class="search-section-title">經文結果 (共 ${verseResults.length} 筆)</div>`;
+                // 顯示標題
+                verseSection.innerHTML = `<div class="search-section-title">經文結果 (共 ${currentSearchResults.length} 筆)</div>`;
                 
-                const escapedKeywords = keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-                const highlightRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'g');
-
-                verseResults.slice(0, 100).forEach(res => {
-                    const div = document.createElement("div");
-                    div.className = "search-result-item";
-                    const highlightedText = res.text.replace(highlightRegex, `<span class="highlight">$1</span>`);
-
-                    div.innerHTML = `
-                        <div style="font-weight:bold; color:#7f8c8d; margin-bottom:5px;">
-                            ${res.book} ${res.chapter}:${res.verse}
-                        </div>
-                        <div>${highlightedText}</div>
-                    `;
-
-                    div.onclick = () => {
-                        const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
-                        selectBook(bookIndex);
-                        highlightCurrentChapterBtn(res.chapter);
-                        loadChapterText(res.book, res.chapter);
-
-                        setTimeout(() => {
-                            const targetRow = document.getElementById(`verse-row-${res.id}`);
-                            if (targetRow) {
-                                targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                targetRow.classList.add('playing'); 
-                                setTimeout(() => targetRow.classList.remove('playing'), 2000);
-                            }
-                        }, 100);
-                    };
-                    verseSection.appendChild(div);
-                });
+                // 4. 呼叫渲染函式 (載入第一批)
+                renderMoreSearchResults();
             }
-            resultsContent.appendChild(verseSection);
+        }
+
+        // --- 新增：分頁渲染函式 ---
+        function renderMoreSearchResults() {
+            const container = document.getElementById("verse-search-container");
+            
+            // 如果已經有「載入更多」按鈕，先移除它 (稍後再加到最下面)
+            const oldBtn = document.getElementById("btn-load-more-results");
+            if (oldBtn) oldBtn.remove();
+
+            // 取出下一批次
+            const nextBatch = currentSearchResults.slice(searchRenderCount, searchRenderCount + SEARCH_BATCH_SIZE);
+            
+            // 準備高亮 Regex
+            const escapedKeywords = currentSearchKeywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+            const highlightRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'g');
+
+            nextBatch.forEach(res => {
+                const div = document.createElement("div");
+                div.className = "search-result-item";
+                
+                // 多重高亮
+                const highlightedText = res.text.replace(highlightRegex, `<span class="highlight">$1</span>`);
+
+                div.innerHTML = `
+                    <div style="font-weight:bold; color:#7f8c8d; margin-bottom:5px;">
+                        ${res.book} ${res.chapter}:${res.verse}
+                    </div>
+                    <div>${highlightedText}</div>
+                `;
+
+                // 點擊跳轉 (您的優化邏輯)
+                div.onclick = () => {
+                    const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
+                    selectBook(bookIndex);
+                    highlightCurrentChapterBtn(res.chapter);
+                    loadChapterText(res.book, res.chapter);
+
+                    setTimeout(() => {
+                        const targetRow = document.getElementById(`verse-row-${res.id}`);
+                        if (targetRow) {
+                            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            targetRow.classList.add('playing'); 
+                            setTimeout(() => targetRow.classList.remove('playing'), 2000);
+                        }
+                    }, 100);
+                };
+                container.appendChild(div);
+            });
+
+            // 更新已渲染數量
+            searchRenderCount += nextBatch.length;
+
+            // 判斷是否還有剩餘資料，若有則加入按鈕
+            if (searchRenderCount < currentSearchResults.length) {
+                const remaining = currentSearchResults.length - searchRenderCount;
+                const btn = document.createElement("button");
+                btn.id = "btn-load-more-results";
+                btn.className = "btn-load-more";
+                btn.textContent = `載入更多 (還有 ${remaining} 筆)`;
+                btn.onclick = () => renderMoreSearchResults(); // 點擊後遞迴呼叫自己
+                container.appendChild(btn);
+            }
         }
     </script>
 </body>
