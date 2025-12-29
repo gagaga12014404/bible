@@ -4,12 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>有聲聖經 (前後章導航版)</title>
+    <title>有聲聖經 (中英對照版)</title>
     <style>
         /* --- 基礎設定 --- */
         body {
             margin: 0;
-            font-family: "Microsoft JhengHei", Arial, sans-serif;
+            font-family: "Microsoft JhengHei", "Segoe UI", Arial, sans-serif;
             background-color: #f4f6f8;
             color: #333;
         }
@@ -20,6 +20,9 @@
             padding: 10px 20px;
             display: flex;
             justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             position: sticky;
             top: 0;
@@ -27,8 +30,8 @@
         }
 
         .search-container {
-            width: 100%;
-            max-width: 600px;
+            flex: 1;
+            max-width: 500px;
         }
 
         .search-input {
@@ -47,6 +50,18 @@
             border-color: #1abc9c;
         }
 
+        /* --- 顯示模式選擇器 --- */
+        .display-mode-selector select {
+            padding: 8px 12px;
+            border-radius: 20px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #555;
+        }
+
         /* --- 橫向書卷導覽列 --- */
         .book-nav-container {
             background-color: #2c3e50;
@@ -55,7 +70,8 @@
             padding: 0 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             position: sticky;
-            top: 54px;
+            top: 60px;
+            /* 根據 navbar 高度調整 */
             z-index: 999;
             -webkit-overflow-scrolling: touch;
         }
@@ -144,14 +160,14 @@
         }
 
         .control-input {
-            width: 60px;
+            width: 50px;
             padding: 5px;
             border: 1px solid #ccc;
             border-radius: 5px;
             text-align: center;
             font-size: 16px;
         }
-        
+
         select.control-input {
             width: auto;
             cursor: pointer;
@@ -199,10 +215,8 @@
         }
 
         .verse-row {
-            padding: 10px 15px;
+            padding: 12px 15px;
             border-bottom: 1px solid #eee;
-            line-height: 1.8;
-            font-size: 19px;
             color: #333;
             transition: background 0.3s;
         }
@@ -215,17 +229,39 @@
         .verse-row.playing {
             background-color: #e8f8f5;
             border-left: 4px solid #1abc9c;
-            color: #16a085;
-            font-weight: 500;
         }
 
         .verse-num {
-            color: #999;
-            font-size: 0.75em;
+            color: #1abc9c;
+            font-size: 0.85em;
             margin-right: 8px;
-            vertical-align: super;
+            font-weight: bold;
+            vertical-align: top;
+            display: inline-block;
+            margin-top: 2px;
             user-select: none;
-            font-weight: normal;
+        }
+
+        /* 經文文字容器 */
+        .verse-text-container {
+            display: inline-block;
+            width: 90%;
+            vertical-align: top;
+        }
+
+        .text-zh {
+            font-size: 19px;
+            line-height: 1.6;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .text-en {
+            font-size: 16px;
+            line-height: 1.4;
+            color: #666;
+            font-family: Georgia, serif;
+            display: block;
         }
 
         /* --- 底部導航按鈕 --- */
@@ -262,7 +298,7 @@
             color: #95a5a6;
         }
 
-        /* --- 載入更多按鈕 (新功能) --- */
+        /* --- 載入更多按鈕 --- */
         .btn-load-more {
             width: 100%;
             padding: 15px;
@@ -299,26 +335,17 @@
             margin-bottom: 10px;
             border-radius: 8px;
             cursor: pointer;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
             font-size: 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             transition: transform 0.1s;
         }
-        
+
         .book-result-item:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 10px rgba(0,0,0,0.2);
-        }
-
-        .book-result-item span {
-            font-weight: bold;
-        }
-
-        .book-result-arrow {
-            font-size: 20px;
-            opacity: 0.8;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
         }
 
         .search-result-item {
@@ -351,12 +378,20 @@
 </head>
 
 <body>
-    <div id="loading-msg">正在讀取聖經資料庫...</div>
+    <div id="loading-msg">正在讀取聖經資料庫 (中英對照)...</div>
 
     <nav class="navbar">
         <div class="search-container">
             <input type="text" id="searchInput" class="search-input" placeholder="輸入關鍵字 (空格可分隔，如: 掃羅 逼迫)"
                 oninput="handleSearch(this.value)" disabled>
+        </div>
+
+        <div class="display-mode-selector">
+            <select id="modeSelect" onchange="changeDisplayMode(this.value)">
+                <option value="zh" selected>中文 zh</option>
+                <option value="en">en (KJV)</option>
+                <option value="both">中英對照</option>
+            </select>
         </div>
     </nav>
 
@@ -377,14 +412,13 @@
                 <span>節 — 第</span>
                 <input type="number" id="endVerseInput" class="control-input" min="1" value="1">
                 <span>節</span>
-                
+
                 <span style="margin-left: 10px;">速度</span>
                 <select id="speedSelect" class="control-input" onchange="changeSpeed(this.value)">
+                    <option value="0.8">0.8x</option>
                     <option value="1" selected>1.0x</option>
                     <option value="1.25">1.25x</option>
                     <option value="1.5">1.5x</option>
-                    <option value="1.75">1.75x</option>
-                    <option value="2">2.0x</option>
                 </select>
 
                 <button class="btn-play" onclick="playRange()">▶ 播放</button>
@@ -405,83 +439,86 @@
     </div>
 
     <script>
-        // 書卷資料
+        // 書卷資料 (新增 bookEN 欄位)
         const bibleDataStructure = [
-            { "book": "創世記", "chapters": [31, 25, 24, 26, 32, 22, 24, 22, 29, 32, 32, 20, 18, 24, 21, 16, 27, 33, 38, 18, 34, 24, 20, 67, 34, 35, 46, 22, 35, 43, 55, 32, 20, 31, 29, 43, 36, 30, 23, 23, 57, 38, 34, 34, 28, 34, 31, 22, 33, 26] },
-            { "book": "出埃及記", "chapters": [22, 25, 22, 31, 23, 30, 25, 32, 35, 29, 10, 51, 22, 31, 27, 36, 16, 27, 25, 26, 36, 31, 33, 18, 40, 37, 21, 43, 46, 38, 18, 35, 23, 35, 35, 38, 29, 31, 43, 38] },
-            { "book": "利未記", "chapters": [17, 16, 17, 35, 19, 30, 38, 36, 24, 20, 47, 8, 59, 57, 33, 34, 16, 30, 37, 27, 24, 33, 44, 23, 55, 46, 34] },
-            { "book": "民數記", "chapters": [54, 34, 51, 49, 31, 27, 89, 26, 23, 36, 35, 16, 33, 45, 41, 50, 13, 32, 22, 29, 35, 41, 30, 25, 18, 65, 23, 31, 40, 16, 54, 42, 56, 29, 34, 13] },
-            { "book": "申命記", "chapters": [46, 37, 29, 49, 33, 25, 26, 20, 29, 22, 32, 32, 18, 29, 23, 22, 20, 22, 21, 20, 23, 30, 25, 22, 19, 19, 26, 68, 29, 20, 30, 52, 29, 12] },
-            { "book": "約書亞記", "chapters": [18, 24, 17, 24, 15, 27, 26, 35, 27, 43, 23, 24, 33, 15, 63, 10, 18, 28, 51, 9, 45, 34, 16, 33] },
-            { "book": "士師記", "chapters": [36, 23, 31, 24, 31, 40, 25, 35, 57, 18, 40, 15, 25, 20, 20, 31, 13, 31, 30, 48, 25] },
-            { "book": "路得記", "chapters": [22, 23, 18, 22] },
-            { "book": "撒母耳記上", "chapters": [28, 36, 21, 22, 12, 21, 17, 22, 27, 27, 15, 25, 23, 52, 35, 23, 58, 30, 24, 42, 15, 23, 29, 22, 44, 25, 12, 25, 11, 31, 13] },
-            { "book": "撒母耳記下", "chapters": [27, 32, 39, 12, 25, 23, 29, 18, 13, 19, 27, 31, 39, 33, 37, 23, 29, 33, 43, 26, 22, 51, 39, 25] },
-            { "book": "列王紀上", "chapters": [53, 46, 28, 34, 18, 38, 51, 66, 28, 29, 43, 33, 34, 31, 34, 34, 24, 46, 21, 43, 29, 53] },
-            { "book": "列王紀下", "chapters": [18, 25, 27, 44, 27, 33, 20, 29, 37, 36, 21, 21, 25, 29, 38, 20, 41, 37, 37, 21, 26, 20, 37, 20, 30] },
-            { "book": "歷代志上", "chapters": [54, 55, 24, 43, 26, 81, 40, 40, 44, 14, 47, 40, 14, 17, 29, 43, 27, 17, 19, 8, 30, 19, 32, 31, 31, 32, 34, 21, 30] },
-            { "book": "歷代志下", "chapters": [17, 18, 17, 22, 14, 42, 22, 18, 31, 19, 23, 16, 22, 15, 19, 14, 19, 34, 11, 37, 20, 12, 21, 27, 28, 23, 9, 27, 36, 27, 21, 33, 25, 33, 27, 23] },
-            { "book": "以斯拉記", "chapters": [11, 70, 13, 24, 17, 22, 28, 36, 15, 44] },
-            { "book": "尼希米記", "chapters": [11, 20, 32, 23, 19, 19, 73, 18, 38, 39, 36, 47, 31] },
-            { "book": "以斯帖記", "chapters": [22, 23, 15, 17, 14, 14, 10, 17, 32, 3] },
-            { "book": "約伯記", "chapters": [22, 13, 26, 21, 27, 30, 21, 22, 35, 22, 20, 25, 28, 22, 35, 22, 16, 21, 29, 29, 34, 30, 17, 25, 6, 14, 23, 28, 25, 31, 40, 22, 33, 37, 16, 33, 24, 41, 30, 24, 34, 17] },
-            { "book": "詩篇", "chapters": [6, 12, 8, 8, 12, 10, 17, 9, 20, 18, 7, 8, 6, 7, 5, 11, 15, 50, 14, 9, 13, 31, 6, 10, 22, 12, 14, 9, 11, 12, 24, 11, 22, 22, 28, 12, 40, 22, 13, 17, 13, 11, 5, 26, 17, 11, 9, 14, 20, 23, 19, 9, 6, 7, 23, 13, 11, 11, 17, 12, 8, 12, 11, 10, 13, 20, 7, 35, 36, 5, 24, 20, 28, 23, 10, 12, 20, 72, 13, 19, 16, 8, 18, 12, 13, 17, 7, 18, 52, 17, 16, 15, 5, 23, 11, 13, 12, 9, 9, 5, 8, 28, 22, 35, 45, 48, 43, 13, 31, 7, 10, 10, 9, 8, 18, 19, 2, 29, 176, 7, 8, 9, 4, 8, 5, 6, 5, 6, 8, 8, 3, 18, 3, 3, 21, 26, 9, 8, 24, 13, 10, 7, 12, 15, 21, 10, 20, 14, 9, 6] },
-            { "book": "箴言", "chapters": [33, 22, 35, 27, 23, 35, 27, 36, 18, 32, 31, 28, 25, 35, 33, 33, 28, 24, 29, 30, 31, 29, 35, 34, 28, 28, 27, 28, 27, 33, 31] },
-            { "book": "傳道書", "chapters": [18, 26, 22, 16, 20, 12, 29, 17, 18, 20, 10, 14] },
-            { "book": "雅歌", "chapters": [17, 17, 11, 16, 16, 13, 13, 14] },
-            { "book": "以賽亞書", "chapters": [31, 22, 26, 6, 30, 13, 25, 22, 21, 34, 16, 6, 22, 32, 9, 14, 14, 7, 25, 6, 17, 25, 18, 23, 12, 21, 13, 29, 24, 33, 9, 20, 24, 17, 10, 22, 38, 22, 8, 31, 29, 25, 28, 28, 25, 13, 15, 22, 26, 11, 23, 15, 12, 17, 13, 12, 21, 14, 21, 22, 11, 12, 19, 12, 25, 24] },
-            { "book": "耶利米書", "chapters": [19, 37, 25, 31, 31, 30, 34, 22, 26, 25, 23, 17, 27, 22, 21, 21, 27, 23, 15, 18, 14, 30, 40, 10, 38, 24, 22, 17, 32, 24, 40, 44, 26, 22, 19, 32, 21, 28, 18, 16, 18, 22, 13, 30, 5, 28, 7, 47, 39, 46, 64, 34] },
-            { "book": "耶利米哀歌", "chapters": [22, 22, 66, 22, 22] },
-            { "book": "以西結書", "chapters": [28, 10, 27, 17, 17, 14, 27, 18, 11, 22, 25, 28, 23, 23, 8, 63, 24, 32, 14, 49, 32, 31, 49, 27, 17, 21, 36, 26, 21, 26, 18, 32, 33, 31, 15, 38, 28, 23, 29, 49, 26, 20, 27, 31, 25, 24, 23, 35] },
-            { "book": "但以理書", "chapters": [21, 49, 30, 37, 31, 28, 28, 27, 27, 21, 45, 13] },
-            { "book": "何西阿書", "chapters": [11, 23, 5, 19, 15, 11, 16, 14, 17, 15, 12, 14, 16, 9] },
-            { "book": "約珥書", "chapters": [20, 32, 21] },
-            { "book": "阿摩司書", "chapters": [15, 16, 15, 13, 27, 14, 17, 14, 15] },
-            { "book": "俄巴底亞書", "chapters": [21] },
-            { "book": "約拿書", "chapters": [17, 10, 10, 11] },
-            { "book": "彌迦書", "chapters": [16, 13, 12, 13, 15, 16, 20] },
-            { "book": "那鴻書", "chapters": [15, 13, 19] },
-            { "book": "哈巴谷書", "chapters": [17, 20, 19] },
-            { "book": "西番雅書", "chapters": [18, 15, 20] },
-            { "book": "哈該書", "chapters": [15, 23] },
-            { "book": "撒迦利亞書", "chapters": [21, 13, 10, 14, 11, 15, 14, 23, 17, 12, 17, 14, 9, 21] },
-            { "book": "瑪拉基書", "chapters": [14, 17, 18, 6] },
-            { "book": "馬太福音", "chapters": [25, 23, 17, 25, 48, 34, 29, 34, 38, 42, 30, 50, 58, 36, 39, 28, 27, 35, 30, 34, 46, 46, 39, 51, 46, 75, 66, 20] },
-            { "book": "馬可福音", "chapters": [45, 28, 35, 41, 43, 56, 37, 38, 50, 52, 33, 44, 37, 72, 47, 20] },
-            { "book": "路加福音", "chapters": [80, 52, 38, 44, 39, 49, 50, 56, 62, 42, 54, 59, 35, 35, 32, 31, 37, 43, 48, 47, 38, 71, 56, 53] },
-            { "book": "約翰福音", "chapters": [51, 25, 36, 54, 47, 71, 53, 59, 41, 42, 57, 50, 38, 31, 27, 33, 26, 40, 42, 31, 25] },
-            { "book": "使徒行傳", "chapters": [26, 47, 26, 37, 42, 15, 60, 40, 43, 48, 30, 25, 52, 28, 41, 40, 34, 28, 41, 38, 40, 30, 35, 27, 27, 32, 44, 31] },
-            { "book": "羅馬書", "chapters": [32, 29, 31, 25, 21, 23, 25, 39, 33, 21, 36, 21, 14, 23, 33, 27] },
-            { "book": "哥林多前書", "chapters": [31, 16, 23, 21, 13, 20, 40, 13, 27, 33, 34, 31, 13, 40, 58, 24] },
-            { "book": "哥林多後書", "chapters": [24, 17, 18, 18, 21, 18, 16, 24, 15, 18, 33, 21, 14] },
-            { "book": "加拉太書", "chapters": [24, 21, 29, 31, 26, 18] },
-            { "book": "以弗所書", "chapters": [23, 22, 21, 32, 33, 24] },
-            { "book": "腓立比書", "chapters": [30, 30, 21, 23] },
-            { "book": "歌羅西書", "chapters": [29, 23, 25, 18] },
-            { "book": "帖撒羅尼迦前書", "chapters": [10, 20, 13, 18, 28] },
-            { "book": "帖撒羅尼迦後書", "chapters": [12, 17, 18] },
-            { "book": "提摩太前書", "chapters": [20, 15, 16, 16, 25, 21] },
-            { "book": "提摩太後書", "chapters": [18, 26, 17, 22] },
-            { "book": "提多書", "chapters": [16, 15, 15] },
-            { "book": "腓利門書", "chapters": [25] },
-            { "book": "希伯來書", "chapters": [14, 18, 19, 16, 14, 20, 28, 13, 28, 39, 40, 29, 25] },
-            { "book": "雅各書", "chapters": [27, 26, 18, 17, 20] },
-            { "book": "彼得前書", "chapters": [25, 25, 22, 19, 14] },
-            { "book": "彼得後書", "chapters": [21, 22, 18] },
-            { "book": "約翰一書", "chapters": [10, 29, 24, 21, 21] },
-            { "book": "約翰二書", "chapters": [13] },
-            { "book": "約翰三書", "chapters": [15] },
-            { "book": "猶大書", "chapters": [25] },
-            { "book": "啟示錄", "chapters": [20, 29, 22, 11, 14, 17, 17, 13, 21, 11, 19, 17, 18, 20, 8, 21, 18, 24, 21, 15, 27, 21] }
+            { "book": "創世記", "bookEN": "Genesis", "chapters": [31, 25, 24, 26, 32, 22, 24, 22, 29, 32, 32, 20, 18, 24, 21, 16, 27, 33, 38, 18, 34, 24, 20, 67, 34, 35, 46, 22, 35, 43, 55, 32, 20, 31, 29, 43, 36, 30, 23, 23, 57, 38, 34, 34, 28, 34, 31, 22, 33, 26] },
+            { "book": "出埃及記", "bookEN": "Exodus", "chapters": [22, 25, 22, 31, 23, 30, 25, 32, 35, 29, 10, 51, 22, 31, 27, 36, 16, 27, 25, 26, 36, 31, 33, 18, 40, 37, 21, 43, 46, 38, 18, 35, 23, 35, 35, 38, 29, 31, 43, 38] },
+            { "book": "利未記", "bookEN": "Leviticus", "chapters": [17, 16, 17, 35, 19, 30, 38, 36, 24, 20, 47, 8, 59, 57, 33, 34, 16, 30, 37, 27, 24, 33, 44, 23, 55, 46, 34] },
+            { "book": "民數記", "bookEN": "Numbers", "chapters": [54, 34, 51, 49, 31, 27, 89, 26, 23, 36, 35, 16, 33, 45, 41, 50, 13, 32, 22, 29, 35, 41, 30, 25, 18, 65, 23, 31, 40, 16, 54, 42, 56, 29, 34, 13] },
+            { "book": "申命記", "bookEN": "Deuteronomy", "chapters": [46, 37, 29, 49, 33, 25, 26, 20, 29, 22, 32, 32, 18, 29, 23, 22, 20, 22, 21, 20, 23, 30, 25, 22, 19, 19, 26, 68, 29, 20, 30, 52, 29, 12] },
+            { "book": "約書亞記", "bookEN": "Joshua", "chapters": [18, 24, 17, 24, 15, 27, 26, 35, 27, 43, 23, 24, 33, 15, 63, 10, 18, 28, 51, 9, 45, 34, 16, 33] },
+            { "book": "士師記", "bookEN": "Judges", "chapters": [36, 23, 31, 24, 31, 40, 25, 35, 57, 18, 40, 15, 25, 20, 20, 31, 13, 31, 30, 48, 25] },
+            { "book": "路得記", "bookEN": "Ruth", "chapters": [22, 23, 18, 22] },
+            { "book": "撒母耳記上", "bookEN": "1 Samuel", "chapters": [28, 36, 21, 22, 12, 21, 17, 22, 27, 27, 15, 25, 23, 52, 35, 23, 58, 30, 24, 42, 15, 23, 29, 22, 44, 25, 12, 25, 11, 31, 13] },
+            { "book": "撒母耳記下", "bookEN": "2 Samuel", "chapters": [27, 32, 39, 12, 25, 23, 29, 18, 13, 19, 27, 31, 39, 33, 37, 23, 29, 33, 43, 26, 22, 51, 39, 25] },
+            { "book": "列王紀上", "bookEN": "1 Kings", "chapters": [53, 46, 28, 34, 18, 38, 51, 66, 28, 29, 43, 33, 34, 31, 34, 34, 24, 46, 21, 43, 29, 53] },
+            { "book": "列王紀下", "bookEN": "2 Kings", "chapters": [18, 25, 27, 44, 27, 33, 20, 29, 37, 36, 21, 21, 25, 29, 38, 20, 41, 37, 37, 21, 26, 20, 37, 20, 30] },
+            { "book": "歷代志上", "bookEN": "1 Chronicles", "chapters": [54, 55, 24, 43, 26, 81, 40, 40, 44, 14, 47, 40, 14, 17, 29, 43, 27, 17, 19, 8, 30, 19, 32, 31, 31, 32, 34, 21, 30] },
+            { "book": "歷代志下", "bookEN": "2 Chronicles", "chapters": [17, 18, 17, 22, 14, 42, 22, 18, 31, 19, 23, 16, 22, 15, 19, 14, 19, 34, 11, 37, 20, 12, 21, 27, 28, 23, 9, 27, 36, 27, 21, 33, 25, 33, 27, 23] },
+            { "book": "以斯拉記", "bookEN": "Ezra", "chapters": [11, 70, 13, 24, 17, 22, 28, 36, 15, 44] },
+            { "book": "尼希米記", "bookEN": "Nehemiah", "chapters": [11, 20, 32, 23, 19, 19, 73, 18, 38, 39, 36, 47, 31] },
+            { "book": "以斯帖記", "bookEN": "Esther", "chapters": [22, 23, 15, 17, 14, 14, 10, 17, 32, 3] },
+            { "book": "約伯記", "bookEN": "Job", "chapters": [22, 13, 26, 21, 27, 30, 21, 22, 35, 22, 20, 25, 28, 22, 35, 22, 16, 21, 29, 29, 34, 30, 17, 25, 6, 14, 23, 28, 25, 31, 40, 22, 33, 37, 16, 33, 24, 41, 30, 24, 34, 17] },
+            { "book": "詩篇", "bookEN": "Psalms", "chapters": [6, 12, 8, 8, 12, 10, 17, 9, 20, 18, 7, 8, 6, 7, 5, 11, 15, 50, 14, 9, 13, 31, 6, 10, 22, 12, 14, 9, 11, 12, 24, 11, 22, 22, 28, 12, 40, 22, 13, 17, 13, 11, 5, 26, 17, 11, 9, 14, 20, 23, 19, 9, 6, 7, 23, 13, 11, 11, 17, 12, 8, 12, 11, 10, 13, 20, 7, 35, 36, 5, 24, 20, 28, 23, 10, 12, 20, 72, 13, 19, 16, 8, 18, 12, 13, 17, 7, 18, 52, 17, 16, 15, 5, 23, 11, 13, 12, 9, 9, 5, 8, 28, 22, 35, 45, 48, 43, 13, 31, 7, 10, 10, 9, 8, 18, 19, 2, 29, 176, 7, 8, 9, 4, 8, 5, 6, 5, 6, 8, 8, 3, 18, 3, 3, 21, 26, 9, 8, 24, 13, 10, 7, 12, 15, 21, 10, 20, 14, 9, 6] },
+            { "book": "箴言", "bookEN": "Proverbs", "chapters": [33, 22, 35, 27, 23, 35, 27, 36, 18, 32, 31, 28, 25, 35, 33, 33, 28, 24, 29, 30, 31, 29, 35, 34, 28, 28, 27, 28, 27, 33, 31] },
+            { "book": "傳道書", "bookEN": "Ecclesiastes", "chapters": [18, 26, 22, 16, 20, 12, 29, 17, 18, 20, 10, 14] },
+            { "book": "雅歌", "bookEN": "Song of Solomon", "chapters": [17, 17, 11, 16, 16, 13, 13, 14] },
+            { "book": "以賽亞書", "bookEN": "Isaiah", "chapters": [31, 22, 26, 6, 30, 13, 25, 22, 21, 34, 16, 6, 22, 32, 9, 14, 14, 7, 25, 6, 17, 25, 18, 23, 12, 21, 13, 29, 24, 33, 9, 20, 24, 17, 10, 22, 38, 22, 8, 31, 29, 25, 28, 28, 25, 13, 15, 22, 26, 11, 23, 15, 12, 17, 13, 12, 21, 14, 21, 22, 11, 12, 19, 12, 25, 24] },
+            { "book": "耶利米書", "bookEN": "Jeremiah", "chapters": [19, 37, 25, 31, 31, 30, 34, 22, 26, 25, 23, 17, 27, 22, 21, 21, 27, 23, 15, 18, 14, 30, 40, 10, 38, 24, 22, 17, 32, 24, 40, 44, 26, 22, 19, 32, 21, 28, 18, 16, 18, 22, 13, 30, 5, 28, 7, 47, 39, 46, 64, 34] },
+            { "book": "耶利米哀歌", "bookEN": "Lamentations", "chapters": [22, 22, 66, 22, 22] },
+            { "book": "以西結書", "bookEN": "Ezekiel", "chapters": [28, 10, 27, 17, 17, 14, 27, 18, 11, 22, 25, 28, 23, 23, 8, 63, 24, 32, 14, 49, 32, 31, 49, 27, 17, 21, 36, 26, 21, 26, 18, 32, 33, 31, 15, 38, 28, 23, 29, 49, 26, 20, 27, 31, 25, 24, 23, 35] },
+            { "book": "但以理書", "bookEN": "Daniel", "chapters": [21, 49, 30, 37, 31, 28, 28, 27, 27, 21, 45, 13] },
+            { "book": "何西阿書", "bookEN": "Hosea", "chapters": [11, 23, 5, 19, 15, 11, 16, 14, 17, 15, 12, 14, 16, 9] },
+            { "book": "約珥書", "bookEN": "Joel", "chapters": [20, 32, 21] },
+            { "book": "阿摩司書", "bookEN": "Amos", "chapters": [15, 16, 15, 13, 27, 14, 17, 14, 15] },
+            { "book": "俄巴底亞書", "bookEN": "Obadiah", "chapters": [21] },
+            { "book": "約拿書", "bookEN": "Jonah", "chapters": [17, 10, 10, 11] },
+            { "book": "彌迦書", "bookEN": "Micah", "chapters": [16, 13, 12, 13, 15, 16, 20] },
+            { "book": "那鴻書", "bookEN": "Nahum", "chapters": [15, 13, 19] },
+            { "book": "哈巴谷書", "bookEN": "Habakkuk", "chapters": [17, 20, 19] },
+            { "book": "西番雅書", "bookEN": "Zephaniah", "chapters": [18, 15, 20] },
+            { "book": "哈該書", "bookEN": "Haggai", "chapters": [15, 23] },
+            { "book": "撒迦利亞書", "bookEN": "Zechariah", "chapters": [21, 13, 10, 14, 11, 15, 14, 23, 17, 12, 17, 14, 9, 21] },
+            { "book": "瑪拉基書", "bookEN": "Malachi", "chapters": [14, 17, 18, 6] },
+            { "book": "馬太福音", "bookEN": "Matthew", "chapters": [25, 23, 17, 25, 48, 34, 29, 34, 38, 42, 30, 50, 58, 36, 39, 28, 27, 35, 30, 34, 46, 46, 39, 51, 46, 75, 66, 20] },
+            { "book": "馬可福音", "bookEN": "Mark", "chapters": [45, 28, 35, 41, 43, 56, 37, 38, 50, 52, 33, 44, 37, 72, 47, 20] },
+            { "book": "路加福音", "bookEN": "Luke", "chapters": [80, 52, 38, 44, 39, 49, 50, 56, 62, 42, 54, 59, 35, 35, 32, 31, 37, 43, 48, 47, 38, 71, 56, 53] },
+            { "book": "約翰福音", "bookEN": "John", "chapters": [51, 25, 36, 54, 47, 71, 53, 59, 41, 42, 57, 50, 38, 31, 27, 33, 26, 40, 42, 31, 25] },
+            { "book": "使徒行傳", "bookEN": "Acts", "chapters": [26, 47, 26, 37, 42, 15, 60, 40, 43, 48, 30, 25, 52, 28, 41, 40, 34, 28, 41, 38, 40, 30, 35, 27, 27, 32, 44, 31] },
+            { "book": "羅馬書", "bookEN": "Romans", "chapters": [32, 29, 31, 25, 21, 23, 25, 39, 33, 21, 36, 21, 14, 23, 33, 27] },
+            { "book": "哥林多前書", "bookEN": "1 Corinthians", "chapters": [31, 16, 23, 21, 13, 20, 40, 13, 27, 33, 34, 31, 13, 40, 58, 24] },
+            { "book": "哥林多後書", "bookEN": "2 Corinthians", "chapters": [24, 17, 18, 18, 21, 18, 16, 24, 15, 18, 33, 21, 14] },
+            { "book": "加拉太書", "bookEN": "Galatians", "chapters": [24, 21, 29, 31, 26, 18] },
+            { "book": "以弗所書", "bookEN": "Ephesians", "chapters": [23, 22, 21, 32, 33, 24] },
+            { "book": "腓立比書", "bookEN": "Philippians", "chapters": [30, 30, 21, 23] },
+            { "book": "歌羅西書", "bookEN": "Colossians", "chapters": [29, 23, 25, 18] },
+            { "book": "帖撒羅尼迦前書", "bookEN": "1 Thessalonians", "chapters": [10, 20, 13, 18, 28] },
+            { "book": "帖撒羅尼迦後書", "bookEN": "2 Thessalonians", "chapters": [12, 17, 18] },
+            { "book": "提摩太前書", "bookEN": "1 Timothy", "chapters": [20, 15, 16, 16, 25, 21] },
+            { "book": "提摩太後書", "bookEN": "2 Timothy", "chapters": [18, 26, 17, 22] },
+            { "book": "提多書", "bookEN": "Titus", "chapters": [16, 15, 15] },
+            { "book": "腓利門書", "bookEN": "Philemon", "chapters": [25] },
+            { "book": "希伯來書", "bookEN": "Hebrews", "chapters": [14, 18, 19, 16, 14, 20, 28, 13, 28, 39, 40, 29, 25] },
+            { "book": "雅各書", "bookEN": "James", "chapters": [27, 26, 18, 17, 20] },
+            { "book": "彼得前書", "bookEN": "1 Peter", "chapters": [25, 25, 22, 19, 14] },
+            { "book": "彼得後書", "bookEN": "2 Peter", "chapters": [21, 22, 18] },
+            { "book": "約翰一書", "bookEN": "1 John", "chapters": [10, 29, 24, 21, 21] },
+            { "book": "約翰二書", "bookEN": "2 John", "chapters": [13] },
+            { "book": "約翰三書", "bookEN": "3 John", "chapters": [15] },
+            { "book": "猶大書", "bookEN": "Jude", "chapters": [25] },
+            { "book": "啟示錄", "bookEN": "Revelation", "chapters": [20, 29, 22, 11, 14, 17, 17, 13, 21, 11, 19, 17, 18, 20, 8, 21, 18, 24, 21, 15, 27, 21] }
         ];
 
         let allScriptures = [];
-        let currentChapterVerses = []; 
-        let playQueue = []; 
+        let currentChapterVerses = [];
+        let playQueue = [];
         let isPlaying = false;
-        let synthesis = window.speechSynthesis; 
-        let currentUtterance = null; 
+        let synthesis = window.speechSynthesis;
+        let currentUtterance = null;
         let currentSpeed = 1.0;
+
+        // 顯示模式: 'both', 'zh', 'en'
+        let displayMode = 'zh';
 
         // 全域變數：紀錄當前讀到的書卷索引與章節
         let curBookIdx = 0;
@@ -497,11 +534,18 @@
             renderBookNav();
 
             try {
-                const response = await fetch('input.txt');
-                if (!response.ok) throw new Error("找不到 input.txt");
+                // 同時讀取中文和英文檔案
+                const [resZH, resEN] = await Promise.all([
+                    fetch('input.txt'),
+                    fetch('kjv.txt')
+                ]);
 
-                const text = await response.text();
-                parseBibleText(text);
+                if (!resZH.ok) throw new Error("找不到 input.txt");
+                // 如果 kjv.txt 找不到，我們還是可以繼續，只是英文會是空的
+                const textZH = await resZH.text();
+                const textEN = resEN.ok ? await resEN.text() : "";
+
+                parseBibleText(textZH, textEN);
 
                 document.getElementById('loading-msg').style.display = 'none';
                 document.getElementById('searchInput').disabled = false;
@@ -510,35 +554,71 @@
                 selectBook(0);
 
             } catch (err) {
-                document.getElementById('loading-msg').textContent = "讀取失敗: 請確認 input.txt 存在並使用 Server 開啟";
+                document.getElementById('loading-msg').textContent = "讀取失敗: 請確認 input.txt 與 kjv.txt 存在";
                 console.error(err);
             }
         });
 
-        function parseBibleText(rawText) {
-            const lines = rawText.split(/\r?\n/);
-            let lineIdx = 0;
-            const totalLines = lines.length;
+        // 核心修正：同時解析中文與英文，並處理行數不一致的問題
+        function parseBibleText(rawZH, rawEN) {
+            const linesZH = rawZH.split(/\r?\n/);
+            const linesEN = rawEN.split(/\r?\n/);
+
+            let idxZH = 0;
+            let idxEN = 0;
+            const totalLinesZH = linesZH.length;
+            const totalLinesEN = linesEN.length;
             let globalAudioIndex = 1;
 
-            bibleDataStructure.forEach(book => {
+            bibleDataStructure.forEach((book, bIndex) => {
                 const bookName = book.book;
+
+                // 檢查是否為約翰三書 (index 63)
+                // 邏輯: 
+                // CUV 約翰三書有 15 節 (14, 15 分開)
+                // KJV 約翰三書有 14 節 (14, 15 合併為 14)
+                const is3John = (bIndex === 63); // 索引從0開始，約翰三書通常是第64卷(index 63)
+
                 book.chapters.forEach((verseCount, chapIdx) => {
                     const realChapter = chapIdx + 1;
+
                     for (let v = 1; v <= verseCount; v++) {
-                        if (lineIdx >= totalLines) return;
+                        let zhText = "";
+                        let enText = "";
+
+                        // 讀取中文行
+                        if (idxZH < totalLinesZH) {
+                            zhText = linesZH[idxZH].trim();
+                            idxZH++;
+                        }
+
+                        // 讀取英文行 (特殊處理約翰三書第15節)
+                        if (is3John && v === 15) {
+                            // 和合本有第15節，KJV沒有
+                            // 這裡我們不讀取下一行英文，讓英文索引停留在原地(或是已結束)
+                            enText = "(KJV merges this into v14)";
+                        } else {
+                            // 正常讀取
+                            if (idxEN < totalLinesEN) {
+                                enText = linesEN[idxEN].trim();
+                                idxEN++;
+                            }
+                        }
+
                         allScriptures.push({
                             book: bookName,
                             chapter: realChapter,
                             verse: v,
-                            text: lines[lineIdx].trim(),
+                            textZH: zhText,
+                            textEN: enText,
                             id: globalAudioIndex
                         });
                         globalAudioIndex++;
-                        lineIdx++;
                     }
                 });
             });
+
+            console.log(`解析完成: 中文讀取到 ${idxZH} 行, 英文讀取到 ${idxEN} 行`);
         }
 
         function renderBookNav() {
@@ -553,17 +633,46 @@
             });
         }
 
-        // --- selectBook ---
+        // --- 新增：根據模式更新標題文字 ---
+        function updateBookTitle() {
+            const currentBook = bibleDataStructure[curBookIdx];
+            const titleEl = document.getElementById("currentBookTitle");
+
+            if (displayMode === 'zh') {
+                titleEl.textContent = currentBook.book;
+            } else if (displayMode === 'en') {
+                titleEl.textContent = currentBook.bookEN;
+            } else {
+                // both 模式：同時顯示
+                titleEl.textContent = `${currentBook.book} ${currentBook.bookEN}`;
+            }
+        }
+
+        // --- 修改：切換模式時，也要更新標題 ---
+        function changeDisplayMode(mode) {
+            displayMode = mode;
+
+            // 1. 更新標題
+            updateBookTitle();
+
+            // 2. 重新載入經文內容
+            const bookName = bibleDataStructure[curBookIdx].book;
+            loadChapterText(bookName, curChapNum);
+        }
+
+        // --- 修改：選擇書卷時，使用新函式設定標題 ---
         function selectBook(index) {
-            // 更新目前書卷索引
             curBookIdx = index;
 
             document.getElementById("read-view").style.display = "block";
             document.getElementById("search-view").style.display = "none";
             document.getElementById("searchInput").value = "";
 
+            // 修改這裡：不再直接設定 textContent，而是呼叫函式
+            updateBookTitle();
+
             const currentBook = bibleDataStructure[index];
-            document.getElementById("currentBookTitle").textContent = currentBook.book;
+            // (原本這行 document.getElementById("currentBookTitle").textContent = currentBook.book; 刪除)
 
             const navItems = document.querySelectorAll('.book-nav-item');
             navItems.forEach(item => item.classList.remove('active'));
@@ -579,13 +688,12 @@
                 const link = document.createElement("div");
                 link.className = "chapter-link";
                 link.textContent = displayNum;
-                
+
                 link.onclick = () => {
                     updateChapterActiveState(link);
                     loadChapterText(currentBook.book, chapterNum);
                 };
 
-                // 預設第一章高亮
                 if (i === 0) {
                     link.style.backgroundColor = "#2c3e50";
                     link.style.color = "#fff";
@@ -593,10 +701,8 @@
                 container.appendChild(link);
             });
 
-            // 預設載入第一章
             loadChapterText(currentBook.book, 1);
         }
-
         function updateChapterActiveState(activeLink) {
             if (!activeLink) return;
             document.querySelectorAll('.chapter-link').forEach(el => {
@@ -608,10 +714,8 @@
             activeLink.style.color = "#fff";
         }
 
-        // 輔助：根據章節數字自動高亮對應按鈕 (用於前後章跳轉)
         function highlightCurrentChapterBtn(chapNum) {
             const container = document.getElementById("chapterContainer");
-            // 因為 children 是從 0 開始，所以 第1章 對應 index 0
             const targetBtn = container.children[chapNum - 1];
             if (targetBtn) {
                 updateChapterActiveState(targetBtn);
@@ -619,13 +723,10 @@
         }
 
         function loadChapterText(bookName, chapterNum) {
-            // 更新目前章節全域變數
             curChapNum = chapterNum;
 
             const controlBar = document.getElementById("playbackControls");
             controlBar.style.display = "flex";
-            
-            // 顯示底部導航
             document.getElementById("bottomNav").style.display = "flex";
 
             const container = document.getElementById("scriptureText");
@@ -640,43 +741,53 @@
 
             startInput.max = totalVerses;
             endInput.max = totalVerses;
-            startInput.value = 1;           
-            endInput.value = totalVerses;   
+            startInput.value = 1;
+            endInput.value = totalVerses;
 
             currentChapterVerses.forEach(v => {
                 const row = document.createElement("div");
                 row.className = "verse-row";
-                row.id = `verse-row-${v.id}`; 
-                row.innerHTML = `<span class="verse-num">${v.verse}</span>${v.text}`;
+                row.id = `verse-row-${v.id}`;
+
+                // 根據 displayMode 決定顯示內容
+                let htmlContent = `<span class="verse-num">${v.verse}</span><div class="verse-text-container">`;
+
+                if (displayMode === 'both' || displayMode === 'zh') {
+                    htmlContent += `<span class="text-zh">${v.textZH}</span>`;
+                }
+
+                if (displayMode === 'both' || displayMode === 'en') {
+                    // 如果中英對照，且沒有英文(如3John:15)，就不顯示
+                    if (v.textEN && v.textEN !== "(KJV merges this into v14)") {
+                        htmlContent += `<span class="text-en">${v.textEN}</span>`;
+                    } else if (displayMode === 'en' && v.textEN === "(KJV merges this into v14)") {
+                        // 純英文模式下的提示
+                        htmlContent += `<span class="text-en" style="font-style:italic; color:#999;">[Included in verse 14 in KJV]</span>`;
+                    }
+                }
+
+                htmlContent += `</div>`;
+                row.innerHTML = htmlContent;
                 container.appendChild(row);
             });
 
             stopAudio();
             window.scrollTo({ top: 0 });
-
-            // 更新底部按鈕狀態 (是否第一章/最後一章)
             updateBottomNav();
         }
 
-        // --- 底部導航邏輯 ---
         function updateBottomNav() {
             const prevBtn = document.getElementById("btnPrevChap");
             const nextBtn = document.getElementById("btnNextChap");
-            
-            // 判斷是否有上一章
-            // 條件：不是(第一卷書 且 第一章)
+
             if (curBookIdx === 0 && curChapNum === 1) {
                 prevBtn.disabled = true;
             } else {
                 prevBtn.disabled = false;
             }
 
-            // 判斷是否有下一章
-            // 條件：不是(最後一卷書 且 最後一章)
-            const totalBooks = bibleDataStructure.length;
             const currentBookTotalChaps = bibleDataStructure[curBookIdx].chapters.length;
-            
-            if (curBookIdx === totalBooks - 1 && curChapNum === currentBookTotalChaps) {
+            if (curBookIdx === bibleDataStructure.length - 1 && curChapNum === currentBookTotalChaps) {
                 nextBtn.disabled = true;
             } else {
                 nextBtn.disabled = false;
@@ -684,23 +795,16 @@
         }
 
         function prevChapter() {
-            // 1. 同一書卷，上一章
             if (curChapNum > 1) {
                 const targetChap = curChapNum - 1;
                 const bookName = bibleDataStructure[curBookIdx].book;
                 highlightCurrentChapterBtn(targetChap);
                 loadChapterText(bookName, targetChap);
-            } 
-            // 2. 跨書卷，跳到上一卷書的最後一章
-            else if (curBookIdx > 0) {
+            } else if (curBookIdx > 0) {
                 const prevBookIdx = curBookIdx - 1;
                 const prevBookData = bibleDataStructure[prevBookIdx];
-                const targetChap = prevBookData.chapters.length; // 最後一章
-                
-                // 切換書卷 (會自動產生章節按鈕並載入第1章，所以我們要馬上覆蓋)
+                const targetChap = prevBookData.chapters.length;
                 selectBook(prevBookIdx);
-                
-                // 覆蓋為最後一章
                 highlightCurrentChapterBtn(targetChap);
                 loadChapterText(prevBookData.book, targetChap);
             }
@@ -708,23 +812,16 @@
 
         function nextChapter() {
             const currentBookTotalChaps = bibleDataStructure[curBookIdx].chapters.length;
-
-            // 1. 同一書卷，下一章
             if (curChapNum < currentBookTotalChaps) {
                 const targetChap = curChapNum + 1;
                 const bookName = bibleDataStructure[curBookIdx].book;
                 highlightCurrentChapterBtn(targetChap);
                 loadChapterText(bookName, targetChap);
-            }
-            // 2. 跨書卷，跳到下一卷書的第1章
-            else if (curBookIdx < bibleDataStructure.length - 1) {
+            } else if (curBookIdx < bibleDataStructure.length - 1) {
                 const nextBookIdx = curBookIdx + 1;
-                // selectBook 預設就是第1章，所以直接呼叫即可
                 selectBook(nextBookIdx);
             }
         }
-
-        // --- 其他功能 ---
 
         function changeSpeed(val) {
             currentSpeed = parseFloat(val);
@@ -760,28 +857,50 @@
             const currentRow = document.getElementById(`verse-row-${verseObj.id}`);
             if (currentRow) {
                 currentRow.classList.add('playing');
-                // 不自動捲動
             }
 
-            const textToSpeak = `${verseObj.text}`; 
-            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            // 判斷要朗讀的文字與語言
+            let textToSpeak = "";
+            let lang = "zh-TW";
 
-            utterance.lang = 'zh-TW';
-            utterance.rate = currentSpeed; 
+            if (displayMode === 'en') {
+                // 純英文模式：唸英文
+                textToSpeak = verseObj.textEN;
+                lang = "en-US";
+                // 跳過空的英文節 (如 3John 15)
+                if (!textToSpeak || textToSpeak.includes("KJV merges")) {
+                    playNextInQueue();
+                    return;
+                }
+            } else {
+                // 預設 (中英對照 或 純中文)：唸中文
+                // 如果您希望中英對照時唸兩種語言，可以修改這裡
+                textToSpeak = verseObj.textZH;
+                lang = "zh-TW";
+            }
+
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            utterance.lang = lang;
+            utterance.rate = currentSpeed;
             utterance.pitch = 1.0;
 
             const voices = synthesis.getVoices();
             let preferredVoice = null;
-            preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Google'));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'zh-TW' && (v.name.includes('Apple') || v.name.includes('Siri')));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Meijia'));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'zh-TW');
+
+            if (lang === "zh-TW") {
+                preferredVoice = voices.find(v => v.lang === 'zh-TW' && v.name.includes('Google')) ||
+                    voices.find(v => v.lang === 'zh-TW');
+            } else {
+                // 英文語音優先選擇
+                preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google US')) ||
+                    voices.find(v => v.lang.startsWith('en'));
+            }
 
             if (preferredVoice) utterance.voice = preferredVoice;
 
             utterance.onend = function () {
                 if (isPlaying) {
-                    playNextInQueue(); 
+                    playNextInQueue();
                 }
             };
 
@@ -799,44 +918,40 @@
             isPlaying = false;
             playQueue = [];
             if (currentUtterance) {
-                currentUtterance.onend = null; 
+                currentUtterance.onend = null;
                 currentUtterance = null;
             }
-            synthesis.cancel(); 
+            synthesis.cancel();
             document.querySelectorAll('.verse-row').forEach(row => row.classList.remove('playing'));
         }
 
-        // --- 核心修改：搜尋 + 載入更多 ---
-        
         function handleSearch(keyword) {
             keyword = keyword.trim();
             const controlBar = document.getElementById("playbackControls");
-            const bottomNav = document.getElementById("bottomNav"); 
+            const bottomNav = document.getElementById("bottomNav");
 
             if (keyword === "") {
                 document.getElementById("read-view").style.display = "block";
                 document.getElementById("search-view").style.display = "none";
                 controlBar.style.display = "flex";
-                bottomNav.style.display = "flex"; 
+                bottomNav.style.display = "flex";
                 return;
             }
 
             document.getElementById("read-view").style.display = "none";
             document.getElementById("search-view").style.display = "block";
-            controlBar.style.display = "none"; 
+            controlBar.style.display = "none";
             bottomNav.style.display = "none";
 
             const resultsContent = document.getElementById("search-results-content");
             resultsContent.innerHTML = "";
 
-            // 1. 關鍵字拆分
             const keywords = keyword.split(/\s+/).filter(k => k.length > 0);
             if (keywords.length === 0) return;
 
-            // --- 書卷導航 (保留) ---
-            let searchBook = keywords[0]; 
+            // 書卷搜尋
+            let searchBook = keywords[0];
             let searchChapter = null;
-
             const digitMatch = keyword.match(/(\d+)$/);
             if (digitMatch) {
                 searchChapter = parseInt(digitMatch[1]);
@@ -844,18 +959,15 @@
             }
 
             const matchedBooks = bibleDataStructure.filter(b => b.book.includes(searchBook));
-            
+
             if (matchedBooks.length > 0) {
                 const bookSection = document.createElement("div");
                 bookSection.innerHTML = `<div class="search-section-title">書卷導航</div>`;
-                
                 matchedBooks.forEach(bookItem => {
                     const div = document.createElement("div");
                     div.className = "book-result-item";
-                    
                     let targetCh = 1;
                     let displayText = `📖 前往：${bookItem.book}`;
-
                     if (searchChapter !== null) {
                         if (searchChapter >= 1 && searchChapter <= bookItem.chapters.length) {
                             targetCh = searchChapter;
@@ -864,12 +976,10 @@
                             displayText = `📖 前往：${bookItem.book} (找不到第${searchChapter}章)`;
                         }
                     }
-
                     div.innerHTML = `<span>${displayText}</span><span class="book-result-arrow">➜</span>`;
-                    
                     div.onclick = () => {
                         const bookIndex = bibleDataStructure.findIndex(b => b.book === bookItem.book);
-                        selectBook(bookIndex); 
+                        selectBook(bookIndex);
                         highlightCurrentChapterBtn(targetCh);
                         loadChapterText(bookItem.book, targetCh);
                     };
@@ -878,77 +988,62 @@
                 resultsContent.appendChild(bookSection);
             }
 
-            // --- 經文搜尋 (支援分頁) ---
-            
-            // 1. 先篩選出所有符合的經文
+            // 經文搜尋 (預設搜尋中文)
             currentSearchResults = allScriptures.filter(s => {
-                return keywords.every(k => s.text.includes(k));
+                // 如果你要同時搜尋英文，可以改成:
+                // const fullText = (s.textZH + " " + s.textEN).toLowerCase();
+                // 但為了精準度，目前僅搜尋 textZH
+                return keywords.every(k => s.textZH.includes(k));
             });
 
-            // 2. 儲存關鍵字 (給渲染時高亮用)
             currentSearchKeywords = keywords;
-            
-            // 3. 重置計數器
             searchRenderCount = 0;
 
             const verseSection = document.createElement("div");
-            verseSection.id = "verse-search-container"; // 給分頁用
-            resultsContent.appendChild(verseSection); // 先把容器放上去
+            verseSection.id = "verse-search-container";
+            resultsContent.appendChild(verseSection);
 
             if (currentSearchResults.length === 0) {
                 if (matchedBooks.length === 0) {
                     verseSection.innerHTML = "<p style='text-align:center; color:#999; margin-top:20px;'>找不到符合的書卷或經文。</p>";
                 }
             } else {
-                // 顯示標題
                 verseSection.innerHTML = `<div class="search-section-title">經文結果 (共 ${currentSearchResults.length} 筆)</div>`;
-                
-                // 4. 呼叫渲染函式 (載入第一批)
                 renderMoreSearchResults();
             }
         }
 
-        // --- 新增：分頁渲染函式 ---
         function renderMoreSearchResults() {
             const container = document.getElementById("verse-search-container");
-            
-            // 如果已經有「載入更多」按鈕，先移除它 (稍後再加到最下面)
             const oldBtn = document.getElementById("btn-load-more-results");
             if (oldBtn) oldBtn.remove();
 
-            // 取出下一批次
             const nextBatch = currentSearchResults.slice(searchRenderCount, searchRenderCount + SEARCH_BATCH_SIZE);
-            
-            // 準備高亮 Regex
             const escapedKeywords = currentSearchKeywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
             const highlightRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'g');
 
             nextBatch.forEach(res => {
                 const div = document.createElement("div");
                 div.className = "search-result-item";
-                
-                // 多重高亮
-                const highlightedText = res.text.replace(highlightRegex, `<span class="highlight">$1</span>`);
+                const highlightedText = res.textZH.replace(highlightRegex, `<span class="highlight">$1</span>`);
 
                 div.innerHTML = `
                     <div style="font-weight:bold; color:#7f8c8d; margin-bottom:5px;">
                         ${res.book} ${res.chapter}:${res.verse}
                     </div>
-                    <div>${highlightedText}</div>
+                    <div style="font-size:18px;">${highlightedText}</div>
                 `;
 
-                // 點擊跳轉 (您的優化邏輯)
                 div.onclick = () => {
                     const bookIndex = bibleDataStructure.findIndex(b => b.book === res.book);
                     selectBook(bookIndex);
                     highlightCurrentChapterBtn(res.chapter);
                     loadChapterText(res.book, res.chapter);
-
                     setTimeout(() => {
                         const targetRow = document.getElementById(`verse-row-${res.id}`);
                         if (targetRow) {
                             targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            targetRow.classList.add('playing'); 
+                            targetRow.classList.add('playing');
                             setTimeout(() => targetRow.classList.remove('playing'), 2000);
                         }
                     }, 100);
@@ -956,17 +1051,14 @@
                 container.appendChild(div);
             });
 
-            // 更新已渲染數量
             searchRenderCount += nextBatch.length;
-
-            // 判斷是否還有剩餘資料，若有則加入按鈕
             if (searchRenderCount < currentSearchResults.length) {
                 const remaining = currentSearchResults.length - searchRenderCount;
                 const btn = document.createElement("button");
                 btn.id = "btn-load-more-results";
                 btn.className = "btn-load-more";
                 btn.textContent = `載入更多 (還有 ${remaining} 筆)`;
-                btn.onclick = () => renderMoreSearchResults(); // 點擊後遞迴呼叫自己
+                btn.onclick = () => renderMoreSearchResults();
                 container.appendChild(btn);
             }
         }
