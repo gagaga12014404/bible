@@ -388,8 +388,8 @@
 
         <div class="display-mode-selector">
             <select id="modeSelect" onchange="changeDisplayMode(this.value)">
-                <option value="zh" selected>中文 zh</option>
-                <option value="en">en (KJV)</option>
+                <option value="zh" selected>和合本 zh</option>
+                <option value="en">KJV en</option>
                 <option value="both">中英對照</option>
             </select>
         </div>
@@ -949,7 +949,7 @@
             const keywords = keyword.split(/\s+/).filter(k => k.length > 0);
             if (keywords.length === 0) return;
 
-            // 書卷搜尋
+            // --- 書卷搜尋保持不變 ---
             let searchBook = keywords[0];
             let searchChapter = null;
             const digitMatch = keyword.match(/(\d+)$/);
@@ -958,7 +958,11 @@
                 searchBook = keyword.replace(digitMatch[0], '').trim();
             }
 
-            const matchedBooks = bibleDataStructure.filter(b => b.book.includes(searchBook));
+            // 同時搜尋中文書名與英文書名 (修改處)
+            const matchedBooks = bibleDataStructure.filter(b =>
+                b.book.includes(searchBook) ||
+                b.bookEN.toLowerCase().includes(searchBook.toLowerCase())
+            );
 
             if (matchedBooks.length > 0) {
                 const bookSection = document.createElement("div");
@@ -967,13 +971,17 @@
                     const div = document.createElement("div");
                     div.className = "book-result-item";
                     let targetCh = 1;
-                    let displayText = `📖 前往：${bookItem.book}`;
+                    // 根據搜尋模式顯示書名
+                    let displayBookName = displayMode === 'en' ? bookItem.bookEN : bookItem.book;
+                    if (displayMode === 'both') displayBookName = `${bookItem.book} ${bookItem.bookEN}`;
+
+                    let displayText = `📖 前往：${displayBookName}`;
                     if (searchChapter !== null) {
                         if (searchChapter >= 1 && searchChapter <= bookItem.chapters.length) {
                             targetCh = searchChapter;
-                            displayText = `📖 前往：${bookItem.book} 第 ${searchChapter} 章`;
+                            displayText += ` 第 ${searchChapter} 章`;
                         } else {
-                            displayText = `📖 前往：${bookItem.book} (找不到第${searchChapter}章)`;
+                            displayText += ` (找不到第${searchChapter}章)`;
                         }
                     }
                     div.innerHTML = `<span>${displayText}</span><span class="book-result-arrow">➜</span>`;
@@ -988,12 +996,16 @@
                 resultsContent.appendChild(bookSection);
             }
 
-            // 經文搜尋 (預設搜尋中文)
+            // --- 經文搜尋 (修改處：同時搜尋中英文且忽略大小寫) ---
             currentSearchResults = allScriptures.filter(s => {
-                // 如果你要同時搜尋英文，可以改成:
-                // const fullText = (s.textZH + " " + s.textEN).toLowerCase();
-                // 但為了精準度，目前僅搜尋 textZH
-                return keywords.every(k => s.textZH.includes(k));
+                return keywords.every(k => {
+                    const key = k.toLowerCase();
+                    // 組合中文和英文進行比對
+                    const textZHLower = s.textZH.toLowerCase();
+                    const textENLower = (s.textEN || "").toLowerCase();
+
+                    return textZHLower.includes(key) || textENLower.includes(key);
+                });
             });
 
             currentSearchKeywords = keywords;
@@ -1020,18 +1032,38 @@
 
             const nextBatch = currentSearchResults.slice(searchRenderCount, searchRenderCount + SEARCH_BATCH_SIZE);
             const escapedKeywords = currentSearchKeywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-            const highlightRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'g');
+
+            // 忽略大小寫的高亮正則表達式
+            const highlightRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'gi');
 
             nextBatch.forEach(res => {
                 const div = document.createElement("div");
                 div.className = "search-result-item";
-                const highlightedText = res.textZH.replace(highlightRegex, `<span class="highlight">$1</span>`);
 
+                // --- 1. 準備中文 HTML ---
+                let htmlZH = "";
+                if (displayMode === 'zh' || displayMode === 'both') {
+                    const highlightedZH = res.textZH.replace(highlightRegex, `<span class="highlight">$1</span>`);
+                    htmlZH = `<div style="font-size:18px; margin-bottom: 4px;">${highlightedZH}</div>`;
+                }
+
+                // --- 2. 準備英文 HTML ---
+                let htmlEN = "";
+                // 只有在 'en' 或 'both' 模式下才處理英文
+                if (displayMode === 'en' || displayMode === 'both') {
+                    if (res.textEN && res.textEN !== "(KJV merges this into v14)") {
+                        const highlightedEN = res.textEN.replace(highlightRegex, `<span class="highlight">$1</span>`);
+                        htmlEN = `<div style="font-size:16px; color:#666; font-family: Georgia, serif;">${highlightedEN}</div>`;
+                    }
+                }
+
+                // --- 3. 組合顯示內容 ---
                 div.innerHTML = `
                     <div style="font-weight:bold; color:#7f8c8d; margin-bottom:5px;">
                         ${res.book} ${res.chapter}:${res.verse}
                     </div>
-                    <div style="font-size:18px;">${highlightedText}</div>
+                    ${htmlZH}
+                    ${htmlEN}
                 `;
 
                 div.onclick = () => {
