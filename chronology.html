@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聖經列王緊湊版年表 (含經文佐證)</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            font-family: "Microsoft JhengHei", "Heiti TC", Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        
+        #scroll-container {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid #ccc;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            padding: 20px 0; 
+        }
+
+        #chart-div {
+            width: 3500px; 
+            height: 1000px; 
+        }
+
+        .controls {
+            margin-bottom: 10px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .verse-highlight {
+            color: #2c3e50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h2>📜 聖經列王年表 (含經文佐證)</h2>
+        <p>💡 <b>操作說明</b>：
+           1. <b>左右卷動</b>下方的卷軸檢視完整時間軸。
+           2. <b>滑鼠左鍵</b>可拖曳畫面。
+           3. <b>滑鼠移至人名上</b>，會顯示詳細年份與<b>聖經經文出處</b>。</p>
+    </div>
+
+    <div id="scroll-container">
+        <div id="chart-div"></div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. 原始資料設定 (新增 verse 欄位)
+        // ==========================================
+        const rawPeople = [
+            // --- 創世記/列祖時期 ---
+            {name: "亞當 (Adam)", birth_bc: -4004, lifespan: 930, color: "lightgray", type: "other", verse: "創世記 5:5"},
+            {name: "塞特 (Seth)", birth_bc: -3874, lifespan: 912, color: "lightgray", type: "other", verse: "創世記 5:8"},
+            {name: "以諾 (Enoch)", birth_bc: -3382, lifespan: 365, color: "lightgray", type: "other", verse: "創世記 5:23"},
+            {name: "瑪土撒拉 (Methuselah)", birth_bc: -3317, lifespan: 969, color: "lightgray", type: "other", verse: "創世記 5:27"},
+            {name: "挪亞 (Noah)", birth_bc: -2948, lifespan: 950, color: "lightgray", type: "other", verse: "創世記 9:29"},
+            {name: "亞伯拉罕 (Abraham)", birth_bc: -2166, lifespan: 175, color: "wheat", type: "other", verse: "創世記 25:7"},
+            {name: "摩西 (Moses)", birth_bc: -1527, lifespan: 120, color: "wheat", type: "other", verse: "申命記 34:7"},
+            {name: "約書亞 (Joshua)", birth_bc: -1490, lifespan: 110, color: "wheat", type: "other", verse: "約書亞記 24:29"},
+
+            // --- 士師記時期 ---
+            {name: "俄陀聶", birth_bc: -1370, lifespan: 40, note: "士師40年", color: "skyblue", type: "other", verse: "士師記 3:11"},
+            {name: "以笏", birth_bc: -1330, lifespan: 80, note: "士師80年", color: "skyblue", type: "other", verse: "士師記 3:30"},
+            {name: "珊迦", birth_bc: -1250, lifespan: 1, note: "士師(<1年)", color: "skyblue", type: "other", verse: "士師記 3:31"},
+            {name: "底波拉", birth_bc: -1249, lifespan: 40, note: "士師40年", color: "skyblue", type: "other", verse: "士師記 5:31"},
+            {name: "基甸", birth_bc: -1209, lifespan: 40, note: "士師40年", color: "skyblue", type: "other", verse: "士師記 8:28"},
+            {name: "亞比米勒", birth_bc: -1169, lifespan: 3, note: "篡位3年", color: "gray", type: "other", verse: "士師記 9:22"},
+            {name: "陀拉", birth_bc: -1166, lifespan: 23, note: "士師23年", color: "skyblue", type: "other", verse: "士師記 10:2"},
+            {name: "睚珥", birth_bc: -1143, lifespan: 22, note: "士師22年", color: "skyblue", type: "other", verse: "士師記 10:3"},
+            {name: "耶弗他", birth_bc: -1121, lifespan: 6, note: "士師6年", color: "skyblue", type: "other", verse: "士師記 12:7"},
+            {name: "以比讚", birth_bc: -1115, lifespan: 7, note: "士師7年", color: "skyblue", type: "other", verse: "士師記 12:9"},
+            {name: "以倫", birth_bc: -1108, lifespan: 10, note: "士師10年", color: "skyblue", type: "other", verse: "士師記 12:11"},
+            {name: "押頓", birth_bc: -1098, lifespan: 8, note: "士師8年", color: "skyblue", type: "other", verse: "士師記 12:14"},
+            {name: "參孫", birth_bc: -1090, lifespan: 20, note: "士師20年", color: "skyblue", type: "other", verse: "士師記 16:31"},
+            {name: "撒母耳", birth_bc: -1105, lifespan: 88, note: "士師/先知", color: "plum", type: "other", verse: "撒母耳記上 7:15"}, 
+
+            // --- 統一王國 (經文佐證) ---
+            {name: "掃羅", birth_bc: -1050, lifespan: 40, note: "統一王國40年", color: "gold", type: "king", verse: "使徒行傳 13:21 (舊約未明記總年數)"},
+            {name: "大衛", birth_bc: -1010, lifespan: 40, note: "統一王國40年", color: "gold", type: "king", verse: "撒母耳記下 5:4"},
+            {name: "所羅門", birth_bc: -970, lifespan: 40, note: "統一王國40年", color: "gold", type: "king", verse: "列王紀上 11:42"},
+
+            // --- 南國猶大 (加入經文) ---
+            {name: "羅波安", birth_bc: -931, lifespan: 17, note: "猶大17年", color: "orange", type: "king", verse: "王上 14:21 所羅門的兒子羅波安作猶大王。他登基的時候年四十一歲，在耶路撒冷，就是耶和華從以色列眾支派中所選擇立他名的城，作王十七年。羅波安的母親名叫拿瑪，是亞捫人。"},
+            {name: "亞比央", birth_bc: -913, lifespan: 3, note: "猶大3年", color: "orange", type: "king", verse: "王上 15:2 在耶路撒冷作王三年。他母親名叫瑪迦，是押沙龍的女兒。"},
+            {name: "亞撒", birth_bc: -911, lifespan: 41, note: "猶大41年", color: "orange", type: "king", verse: "王上 15:10 在耶路撒冷作王四十一年。他祖母名叫瑪迦，是押沙龍的女兒。"},
+            {name: "約沙法", birth_bc: -870, lifespan: 25, note: "猶大25年", color: "orange", type: "king", verse: "王上 22:42 約沙法登基的時候年三十五歲，在耶路撒冷作王二十五年。他母親名叫阿蘇巴，乃示利希的女兒。"},
+            {name: "約蘭(猶)", birth_bc: -848, lifespan: 8, note: "猶大8年", color: "orange", type: "king", verse: "王下 8:17 約蘭登基的時候年三十二歲，在耶路撒冷作王八年。"},
+            {name: "亞哈謝(猶)", birth_bc: -841, lifespan: 1, note: "猶大1年", color: "orange", type: "king", verse: "王下 8:26 他登基的時候年二十二歲，在耶路撒冷作王一年。他母親名叫亞他利雅，是以色列王暗利的孫女。"},
+            {name: "亞他利雅", birth_bc: -841, lifespan: 6, note: "篡位6年", color: "red", type: "king", verse: "王下 11:3 約阿施和他的乳母藏在耶和華的殿裡六年；亞他利雅篡了國位。"},
+            {name: "約阿施(猶)", birth_bc: -835, lifespan: 40, note: "猶大40年", color: "orange", type: "king", verse: "王下 12:1 耶戶第七年，約阿施登基，在耶路撒冷作王四十年。他母親名叫西比亞，是別是巴人。"},
+            {name: "亞瑪謝", birth_bc: -796, lifespan: 29, note: "猶大29年", color: "orange", type: "king", verse: "王下 14:2 他登基的時候年二十五歲，在耶路撒冷作王二十九年。他母親名叫約耶但，是耶路撒冷人。"},
+            {name: "烏西雅", birth_bc: -767, lifespan: 52, note: "猶大52年", color: "orange", type: "king", verse: "王下 15:2 (又名亞撒利雅) 他登基的時候年十六歲，在耶路撒冷作王五十二年。他母親名叫耶可利雅，是耶路撒冷人。"},
+            {name: "約坦", birth_bc: -740, lifespan: 16, note: "猶大16年", color: "orange", type: "king", verse: "王下 15:33 他登基的時候年二十五歲，在耶路撒冷作王十六年。他母親名叫耶路沙，是撒督的女兒。"},
+            {name: "亞哈斯", birth_bc: -732, lifespan: 16, note: "猶大16年", color: "orange", type: "king", verse: "王下 16:2 他登基的時候年二十歲，在耶路撒冷作王十六年；不像他祖大衛行耶和華─他　神眼中看為正的事，"},
+            {name: "希西家", birth_bc: -716, lifespan: 29, note: "猶大29年", color: "orange", type: "king", verse: "王下 18:2 他登基的時候年二十五歲，在耶路撒冷作王二十九年。他母親名叫亞比，是撒迦利雅的女兒。"},
+            {name: "瑪拿西", birth_bc: -687, lifespan: 55, note: "猶大55年", color: "orange", type: "king", verse: "王下 21:1 瑪拿西登基的時候年十二歲，在耶路撒冷作王五十五年。他母親名叫協西巴。"},
+            {name: "亞們", birth_bc: -642, lifespan: 2, note: "猶大2年", color: "orange", type: "king", verse: "王下 21:19 亞們登基的時候年二十二歲，在耶路撒冷作王二年。他母親名叫米舒利密，是約提巴人哈魯斯的女兒。"},
+            {name: "約西亞", birth_bc: -640, lifespan: 31, note: "猶大31年", color: "orange", type: "king", verse: "王下 22:1 約西亞登基的時候年八歲，在耶路撒冷作王三十一年。他母親名叫耶底大，是波斯加人亞大雅的女兒。"},
+            {name: "約哈斯(猶)", birth_bc: -609, lifespan: 0.25, note: "3個月", color: "orange", type: "king", verse: "王下 23:31 約哈斯登基的時候年二十三歲，在耶路撒冷作王三個月。他母親名叫哈慕他，是立拿人耶利米的女兒。"},
+            {name: "約雅敬", birth_bc: -609, lifespan: 11, note: "猶大11年", color: "orange", type: "king", verse: "王下 23:36 約雅敬登基的時候年二十五歲，在耶路撒冷作王十一年。他母親名叫西布大，是魯瑪人毘大雅的女兒。"},
+            {name: "約雅斤", birth_bc: -598, lifespan: 0.25, note: "3個月", color: "orange", type: "king", verse: "王下 24:8 約雅斤登基的時候年十八歲，在耶路撒冷作王三個月。他母親名叫尼護施他，是耶路撒冷人以利拿單的女兒。"},
+            {name: "西底家", birth_bc: -597, lifespan: 11, note: "末王11年", color: "orange", type: "king", verse: "王下 24:18 西底家登基的時候年二十一歲，在耶路撒冷作王十一年。他母親名叫哈慕他，是立拿人耶利米的女兒。"},
+
+            // --- 北國以色列 (加入經文) ---
+            {name: "耶羅波安一世", birth_bc: -931, lifespan: 22, note: "以色列22年", color: "lightgreen", type: "king", verse: "王上 14:20 耶羅波安作王二十二年，就與他列祖同睡。他兒子拿答接續他作王。"},
+            {name: "拿答", birth_bc: -910, lifespan: 2, note: "以色列2年", color: "lightgreen", type: "king", verse: "王上 15:25 猶大王亞撒第二年，耶羅波安的兒子拿答登基作以色列王共二年，"},
+            {name: "巴沙", birth_bc: -909, lifespan: 24, note: "以色列24年", color: "lightgreen", type: "king", verse: "王上 15:33 猶大王亞撒第三年，亞希雅的兒子巴沙在得撒登基作以色列眾人的王共二十四年。"},
+            {name: "以拉", birth_bc: -886, lifespan: 2, note: "以色列2年", color: "lightgreen", type: "king", verse: "王上 16:8 猶大王亞撒二十六年，巴沙的兒子以拉在得撒登基作以色列王共二年。"},
+            {name: "心利", birth_bc: -885, lifespan: 0.05, note: "7天", color: "lightgreen", type: "king", verse: "王上 16:15 猶大王亞撒二十七年，心利在得撒作王七日。那時民正安營圍攻非利士的基比頓。"},
+            {name: "暗利", birth_bc: -885, lifespan: 12, note: "以色列12年", color: "lightgreen", type: "king", verse: "王上 16:23 猶大王亞撒三十一年，暗利登基作以色列王共十二年；在得撒作王六年。"},
+            {name: "亞哈", birth_bc: -874, lifespan: 22, note: "以色列22年", color: "lightgreen", type: "king", verse: "王上 16:29 猶大王亞撒三十八年，暗利的兒子亞哈登基作了以色列王。暗利的兒子亞哈在撒瑪利亞作以色列王二十二年。"},
+            {name: "亞哈謝(以)", birth_bc: -853, lifespan: 2, note: "以色列2年", color: "lightgreen", type: "king", verse: "王上 22:51 猶大王約沙法十七年，亞哈的兒子亞哈謝在撒瑪利亞登基，作以色列王共二年。"},
+            {name: "約蘭(以)", birth_bc: -852, lifespan: 12, note: "以色列12年", color: "lightgreen", type: "king", verse: "王下 3:1 猶大王約沙法十八年，亞哈的兒子約蘭在撒瑪利亞登基作了以色列王十二年。"},
+            {name: "耶戶", birth_bc: -841, lifespan: 28, note: "以色列28年", color: "lightgreen", type: "king", verse: "王下 10:36 耶戶在撒瑪利亞作以色列王二十八年。"},
+            {name: "約哈斯(以)", birth_bc: -814, lifespan: 17, note: "以色列17年", color: "lightgreen", type: "king", verse: "王下 13:1 猶大王亞哈謝的兒子約阿施二十三年，耶戶的兒子約哈斯在撒瑪利亞登基作以色列王十七年。"},
+            {name: "約阿施(以)", birth_bc: -798, lifespan: 16, note: "以色列16年", color: "lightgreen", type: "king", verse: "王下 13:10 猶大王約阿施三十七年，約哈斯的兒子約阿施在撒瑪利亞登基作以色列王十六年。"},
+            {name: "耶羅波安二世", birth_bc: -782, lifespan: 41, note: "以色列41年", color: "lightgreen", type: "king", verse: "王下 14:23 猶大王約阿施的兒子亞瑪謝十五年，以色列王約阿施的兒子耶羅波安在撒瑪利亞登基，作王四十一年。"},
+            {name: "撒迦利亞", birth_bc: -753, lifespan: 0.5, note: "6個月", color: "lightgreen", type: "king", verse: "王下 15:8 猶大王亞撒利雅三十八年，耶羅波安的兒子撒迦利雅在撒瑪利亞作以色列王六個月。"},
+            {name: "沙龍", birth_bc: -752, lifespan: 0.08, note: "1個月", color: "lightgreen", type: "king", verse: "王下 15:13 猶大王烏西雅(就是亞撒利雅)三十九年，雅比的兒子沙龍登基在撒瑪利亞作王一個月。"},
+            {name: "米拿現", birth_bc: -752, lifespan: 10, note: "以色列10年", color: "lightgreen", type: "king", verse: "王下 15:17 猶大王亞撒利雅三十九年，迦底的兒子米拿現登基，在撒瑪利亞作以色列王十年。"},
+            {name: "比加轄", birth_bc: -742, lifespan: 2, note: "以色列2年", color: "lightgreen", type: "king", verse: "王下 15:23 猶大王亞撒利雅五十年，米拿現的兒子比加轄在撒瑪利亞登基作以色列王二年。"},
+            {name: "比加", birth_bc: -740, lifespan: 20, note: "以色列20年", color: "lightgreen", type: "king", verse: "王下 15:27 猶大王亞撒利雅五十二年，利瑪利的兒子比加在撒瑪利亞登基作以色列王二十年。"},
+            {name: "何細亞", birth_bc: -732, lifespan: 9, note: "末王9年", color: "lightgreen", type: "king", verse: "王下 17:1 猶大王亞哈斯十二年，以拉的兒子何細亞在撒瑪利亞登基作以色列王九年。"}
+        ];
+
+        // ==========================================
+        // 2. 資料處理核心邏輯 (計算重疊 + 產生詳細懸停文字)
+        // ==========================================
+        const others = rawPeople.filter(p => p.type === 'other');
+        let kings = rawPeople.filter(p => p.type === 'king');
+
+        kings.sort((a, b) => a.birth_bc - b.birth_bc);
+
+        function processKingsWithOverlaps(sortedKings) {
+            let tracks = []; 
+            let processedKings = [];
+
+            sortedKings.forEach(king => {
+                let start = king.birth_bc;
+                let end = king.birth_bc + king.lifespan;
+                let placed = false;
+
+                for (let i = 0; i < tracks.length; i++) {
+                    if (tracks[i] <= start) {
+                        king.trackIndex = i; 
+                        tracks[i] = end;    
+                        placed = true;
+                        break;
+                    }
+                }
+
+                if (!placed) {
+                    king.trackIndex = tracks.length;
+                    tracks.push(end);
+                }
+                processedKings.push(king);
+            });
+            return processedKings;
+        }
+
+        kings = processKingsWithOverlaps(kings);
+
+        // --- 準備繪圖資料 ---
+        let finalY = [];
+        let finalX = [];
+        let finalBase = [];
+        let finalColors = [];
+        let finalTexts = [];
+        let finalHoverTexts = [];
+        let finalTextAngles = [];
+        let finalPositions = [];
+
+        // 共用的懸停文字產生器
+        function createHoverText(p, extraInfo = "") {
+            const endYear = Math.round(p.birth_bc + p.lifespan);
+            let text = `<b>${p.name}</b><br>📅 年份: ${p.birth_bc} ~ ${endYear} BC<br>⏱️ 在位/壽命: ${p.note || p.lifespan + '年'}`;
+            // 💡 這裡加上經文顯示
+            if (p.verse) {
+                text += `<br>📖 經文: ${p.verse}`;
+            }
+            if (extraInfo) {
+                text += `<br>${extraInfo}`;
+            }
+            return text;
+        }
+
+        // 1. 處理非國王資料
+        others.forEach(p => {
+            finalY.push(p.name); 
+            finalX.push(p.lifespan);
+            finalBase.push(p.birth_bc);
+            finalColors.push(p.color);
+            finalTexts.push(p.note ? p.note : `${p.lifespan}歲`);
+            
+            finalHoverTexts.push(createHoverText(p));
+            
+            finalTextAngles.push(0); 
+            finalPositions.push('outside'); 
+        });
+
+        // 2. 處理國王資料
+        kings.forEach(p => {
+            let indent = "　".repeat(p.trackIndex);
+            finalY.push(`${indent}統合列王時期 (第${p.trackIndex + 1}層)`);
+            
+            finalX.push(p.lifespan);
+            finalBase.push(p.birth_bc);
+            finalColors.push(p.color);
+            finalTexts.push(p.name); 
+            
+            // 國王多顯示一個層級資訊
+            finalHoverTexts.push(createHoverText(p, `(第${p.trackIndex + 1}層)`));
+            
+            finalTextAngles.push(-90); 
+            finalPositions.push('inside'); 
+        });
+
+
+        // ==========================================
+        // 3. Plotly 繪圖設定
+        // ==========================================
+        const trace = {
+            type: 'bar',
+            x: finalX,
+            y: finalY,
+            base: finalBase,
+            orientation: 'h',
+            marker: {
+                color: finalColors,
+                line: { color: 'black', width: 0.5 }
+            },
+            text: finalTexts,
+            textangle: finalTextAngles,
+            textposition: finalPositions,
+            insidetextanchor: 'middle', 
+            hoverinfo: 'text',
+            hovertext: finalHoverTexts,
+            width: 0.8 
+        };
+
+        const layout = {
+            title: '聖經列王緊湊版年表 (含經文佐證)',
+            dragmode: 'pan', 
+            xaxis: {
+                title: '西元前年份 (BC)',
+                range: [-4200, -500],
+                dtick: 100,
+                side: 'top',
+                gridcolor: '#eee',
+                zeroline: false,
+                layer: 'below traces'
+            },
+            yaxis: {
+                autorange: 'reversed', 
+                automargin: true,
+                title: { standoff: 20 } 
+            },
+            barmode: 'stack',
+            hovermode: 'closest',
+            margin: {
+                l: 220, 
+                r: 50,
+                t: 100,
+                b: 50
+            },
+            font: { size: 13 }
+        };
+
+        const config = {
+            responsive: true,
+            scrollZoom: true,
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d']
+        };
+
+        Plotly.newPlot('chart-div', [trace], layout, config);
+
+    </script>
+</body>
+</html>
